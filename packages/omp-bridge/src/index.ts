@@ -10,6 +10,9 @@
  *
  * Transport decision (ADR-002): RPC stdio (`omp --mode rpc`) dipilih sebagai transport
  * nyata; mock worker adalah fallback FASE-1 karena bin omp rusak (OMP-001).
+ *
+ * FASE-2 (TASK-2.2): WorkerManager — pool ≤ 3 (hard cap), FIFO queue,
+ * timeout/kill/retry idempoten, heartbeat; lihat src/manager.ts.
  */
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -18,6 +21,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TaskSpecSchema, type TaskSpec } from "handoff-contract";
 
+export * from "./manager.js";
 export const BRIDGE_VERSION = "0.1.0";
 
 /** Default timeout worker: 300 detik (TASK-1.3). */
@@ -61,12 +65,16 @@ export interface RunTaskResultOk {
   diffFull: string;
   /** Path worktree (masih ada hanya jika opts.keepWorktree=true). */
   worktree: string;
+  /** PID proses worker (dipakai worker manager: zombie/pid record). */
+  pid?: number | null;
 }
 
 export interface RunTaskResultErr {
   status: "error";
   code: BridgeErrorCode;
   message: string;
+  /** PID proses worker bila sempat spawn (TIMEOUT/kill-failed). */
+  pid?: number | null;
 }
 
 export type RunTaskResult = RunTaskResultOk | RunTaskResultErr;
@@ -158,7 +166,7 @@ async function runWorker(
   env: Record<string, string>,
   timeoutMs: number,
   stdinPayload: string | null,
-): Promise<{ exitCode: number | null; signal: string | null; stdoutTail: string; timedOut: boolean }> {
+): Promise<{ exitCode: number | null; signal: string | null; stdoutTail: string; timedOut: boolean; pid: number | null }> {
   return new Promise((resolvePromise) => {
     const child = spawn(cmd[0]!, cmd.slice(1), {
       cwd,
@@ -187,7 +195,7 @@ async function runWorker(
 
     child.on("error", (_err: Error) => {
       clearTimeout(timer);
-      resolvePromise({ exitCode: null, signal: null, stdoutTail: out, timedOut });
+      resolvePromise({ exitCode: null, signal: null, stdoutTail: out, timedOut, pid: child.pid ?? null });
     });
 
     if (stdinPayload !== null) {
@@ -208,7 +216,7 @@ async function runWorker(
     child.on("exit", (code, signal) => {
       clearTimeout(timer);
       const tail = out.split("\n").slice(-60).join("\n").trim();
-      resolvePromise({ exitCode: code, signal, stdoutTail: tail, timedOut });
+      resolvePromise({ exitCode: code, signal, stdoutTail: tail, timedOut, pid: child.pid ?? null });
     });
   });
 }
@@ -298,7 +306,7 @@ export async function runTask(
         : ["omp", "--mode", "rpc"]);
 
     const payload = mock ? null : `${JSON.stringify(spec)}\n`;
-    const { exitCode, stdoutTail, timedOut } = await runWorker(
+    const { exitCode, stdoutTail, timedOut, pid } = await runWorker(
       workerCmd,
       worktree,
       { OMP_BRIDGE_WORKTREE: worktree, OMP_BRIDGE_SPEC_FILE: specFile, ...(opts.env ?? {}) },
@@ -312,6 +320,7 @@ export async function runTask(
       return {
         status: "error",
         code: "TIMEOUT",
+        pid,
         message: `worker melebihi timeout ${timeoutMs}ms — proses di-kill (SIGKILL). Worker timeout ≠ gagal: cek side-effect (file/diff) sebelum re-dispatch.`,
       };
     }
@@ -322,6 +331,7 @@ export async function runTask(
       return {
         status: "error",
         code: "SPAWN_ERROR",
+        pid,
         message: `gagal spawn worker "${workerCmd[0]}": ${stdoutTail || "unknown error"} (bin omp rusak? lihat docs/BLOCKERS.md OMP-001)`,
       };
     }
@@ -331,7 +341,7 @@ export async function runTask(
       removeWorktree(repoPath, worktree);
     }
     rmSync(specFile, { force: true });
-    return { status: "ok", exitCode, stdoutTail, diffSummary, diffFull, worktree };
+    return { status: "ok", exitCode, stdoutTail, diffSummary, diffFull, worktree, pid };
   } catch (err) {
     // error tak terduga (mis. writeFileSync gagal) — bersihkan side-effect
     removeWorktree(repoPath, worktree);

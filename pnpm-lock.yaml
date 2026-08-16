@@ -104,9 +104,16 @@ importers:
       handoff-contract:
         specifier: workspace:*
         version: link:../contracts
+      task-store:
+        specifier: workspace:*
+        version: link:../task-store
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+    devDependencies:
+      conflict-map:
+        specifier: workspace:*
+        version: link:../conflict-map
 
   packages/task-store:
     dependencies:

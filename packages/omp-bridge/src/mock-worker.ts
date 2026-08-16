@@ -21,20 +21,54 @@ import { TaskSpecSchema, type TaskSpec } from "handoff-contract";
 
 export const BUGGY_ADD = "return a - b";
 export const FIXED_ADD = "return a + b";
+export const NOT_IMPLEMENTED_DOUBLE = "raise NotImplementedError";
+export const DOUBLE_IMPL = "return x * 2";
+export const TYPO_HELLO = "Helllo";
+export const FIXED_HELLO = "Hello";
 
 export interface MockFixResult {
   changedFiles: string[];
 }
 
-/** Fix deterministik fixture repo-a: koreksi fungsi add di lib/math.py. */
-export function applyMockFix(worktree: string, _spec: Pick<TaskSpec, "task_id" | "objective">): MockFixResult {
+/**
+ * Fix deterministik berbasis isi file + objective spec (no network, frozen):
+ * - repo-a: fungsi add di lib/math.py salah return → `return a + b` (FASE 1).
+ * - repo-a (scenario konflik B): tambah fungsi mul bila objective memuat "mul".
+ * - repo-b: lib/feature.py TODO (NotImplementedError) → implementasi double.
+ * - repo-c: lib/greet.py typo "Helllo" → "Hello".
+ * Rule content-driven: fixture sudah ter-fix → tanpa perubahan (idempoten).
+ */
+export function applyMockFix(worktree: string, spec: Pick<TaskSpec, "task_id" | "objective">): MockFixResult {
   const changedFiles: string[] = [];
+  const OBJ = (spec.objective ?? "").toLowerCase();
   const mathPath = join(worktree, "lib", "math.py");
   if (existsSync(mathPath)) {
-    const src = readFileSync(mathPath, "utf8");
-    if (src.includes(BUGGY_ADD)) {
-      writeFileSync(mathPath, src.split(BUGGY_ADD).join(FIXED_ADD));
+    let src = readFileSync(mathPath, "utf8");
+    const wantsAddFix = /add|fix|bug|debug|salah return/.test(OBJ);
+    if (src.includes(BUGGY_ADD) && wantsAddFix) {
+      src = src.split(BUGGY_ADD).join(FIXED_ADD);
+      writeFileSync(mathPath, src);
       changedFiles.push("lib/math.py");
+    }
+    if (!src.includes("def mul") && /mul|kali/.test(OBJ)) {
+      writeFileSync(mathPath, `${src}\n\ndef mul(a: int, b: int) -> int:\n    return a * b\n`);
+      changedFiles.push("lib/math.py");
+    }
+  }
+  const featurePath = join(worktree, "lib", "feature.py");
+  if (existsSync(featurePath) && /double|feature|implement/.test(OBJ)) {
+    const fsrc = readFileSync(featurePath, "utf8");
+    if (fsrc.includes(NOT_IMPLEMENTED_DOUBLE)) {
+      writeFileSync(featurePath, fsrc.split(NOT_IMPLEMENTED_DOUBLE).join(DOUBLE_IMPL));
+      changedFiles.push("lib/feature.py");
+    }
+  }
+  const greetPath = join(worktree, "lib", "greet.py");
+  if (existsSync(greetPath) && /typo|greet|hello|sapaan/.test(OBJ)) {
+    const gsrc = readFileSync(greetPath, "utf8");
+    if (gsrc.includes(TYPO_HELLO)) {
+      writeFileSync(greetPath, gsrc.split(TYPO_HELLO).join(FIXED_HELLO));
+      changedFiles.push("lib/greet.py");
     }
   }
   return { changedFiles };

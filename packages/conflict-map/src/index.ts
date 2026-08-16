@@ -5,6 +5,7 @@
  *   (false-positive-leaning). Dipakai merge orchestrator (TASK-2.1) sebagai
  *   defense-in-depth sebelum squash merge sequential.
  * - ownership.ts (TASK-2.3): file ownership map one-file-one-owner + claim/release,
- *   pre-spawn check di worker manager.
+ *   pre-spawn check di worker manager (`data/ownership.json`).
  */
 export * from "./merge-tree.js";
+export * from "./ownership.js";

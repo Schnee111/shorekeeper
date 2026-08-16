@@ -18,6 +18,10 @@
   },
   "dependencies": {
     "handoff-contract": "workspace:*",
+    "task-store": "workspace:*",
     "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "conflict-map": "workspace:*"
   }
 }
