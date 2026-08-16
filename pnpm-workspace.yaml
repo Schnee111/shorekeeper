@@ -1,0 +1,7 @@
+packages:
+  - "apps/client"
+  - "packages/*"
+
+# Local dev monorepo: izinkan semua postinstall (better-sqlite3 native, esbuild,
+# protobufjs). Ditinjau ulang jika ada dependency tak dikenal yang mencurigakan.
+dangerouslyAllowAllBuilds: true

@@ -6,3 +6,6 @@ dist/
 .venv/
 __pycache__/
 *.pyc
+*.tsbuildinfo
+scripts/e2e/logs/
+.eslintcache
