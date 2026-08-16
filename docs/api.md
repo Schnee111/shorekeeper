@@ -158,6 +158,18 @@ Contract-first decomposition — `TaskSpecSchema` (zod, strict):
 
 - **Purpose:** merge gate: ambil artifact worker → verifier → squash merge sequential ke main.
 - **Side effect:** tulis branch main lokal. **Approval: YES** untuk push remote.
+- Implementasi: `packages/merge-orchestrator` (`MergeOrchestrator.mergeTask`) — pemegang
+  tunggal merge gate; worker tidak pernah push/commit ke main (hard prohibition).
+  Kebijakan: `docs/adr/0003-merge-policy.md`.
+- **merge_commit** (sha ≥ 7 char) tercatat di `data/artifacts/<task_id>/merge.json`
+  (dirujuk store via `artifact_dir`) + disisipkan di akhir `summary` store
+  (`Squash merge: <sha7>.`) — kontrak Fase 1 (TaskRecordSchema) tidak diubah.
+- **Approval push:** env `SHOREKEEPER_APPROVAL_GRANTED=1` (+ opsional
+  `SHOREKEEPER_REMOTE_URL` untuk origin) → push `main` ke remote dengan retry 3×
+  backoff; gagal → task `failed` (`PUSH_REJECTED`) + instruksi manual. Tanpa approval
+  → hanya branch lokal `main-local` yang di-update (default).
+- **Verifier merah** → merge ditolak, task kembali `blocked` dengan
+  `error="VERIFY_FAILED"` (tidak pernah force-merge / `--no-verify`).
 
 ### 3.5 CLI `task-store` (debug manual + dipakai E2E)
 

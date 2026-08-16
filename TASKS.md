@@ -433,7 +433,7 @@ otomatis vs konfirmasi voice), (b) ditemukan kebutuhan strategi merge di luar AD
 ---
 
 ## TASK-2.1: Merge orchestrator + quality gate Fase 2
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-1.5
+Status: [x] done · Prioritas: P0 · Depends on: TASK-1.5
 
 ### Objective
 Orchestrator menjadi pemegang tunggal merge gate: menerima artifact worker, verifikasi AC, squash

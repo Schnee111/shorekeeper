@@ -79,11 +79,25 @@ importers:
         specifier: ^6.0.0
         version: 6.4.3(@types/node@22.20.1)(jiti@1.21.7)
 
+  packages/conflict-map: {}
+
   packages/contracts:
     dependencies:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+
+  packages/merge-orchestrator:
+    dependencies:
+      conflict-map:
+        specifier: workspace:*
+        version: link:../conflict-map
+      handoff-contract:
+        specifier: workspace:*
+        version: link:../contracts
+      task-store:
+        specifier: workspace:*
+        version: link:../task-store
 
   packages/omp-bridge:
     dependencies:
