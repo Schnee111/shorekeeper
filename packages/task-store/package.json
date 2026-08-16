@@ -11,6 +11,9 @@
       "default": "./dist/index.js"
     }
   },
+  "bin": {
+    "task-store": "./dist/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src tests",
@@ -18,6 +21,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",
+    "handoff-contract": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

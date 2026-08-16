@@ -287,7 +287,7 @@ terverifikasi — dibuktikan via skrip POC yang exit-0.
 ---
 
 ## TASK-1.4: Task store SQLite (WAL)
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-1.1
+Status: [x] done · Prioritas: P0 · Depends on: TASK-1.1
 
 ### Objective
 Task store durable berbasis SQLite WAL di `packages/task-store` dengan state machine + query
@@ -318,14 +318,14 @@ voice-optimized — semua status task survive restart.
 5. CLI minimal `task-store`: `new/status/done/fail/list` untuk debugging manual (dan dipakai E2E).
 
 ### Acceptance Criteria
-- [ ] `pnpm --filter task-store test` exit 0: unit test CRUD, valid + invalid transitions, `not_found`,
+- [x] `pnpm --filter task-store test` exit 0: unit test CRUD, valid + invalid transitions, `not_found`,
       stale detection (fake timer)
-- [ ] Test WAL: `PRAGMA journal_mode` = `wal`; write+read dalam satu transaksi → konsisten
-- [ ] `checkTaskStatus(["task_fe_01"])` pada fixture 3 task (1 queued, 1 done, 1 failed) → JSON
+- [x] Test WAL: `PRAGMA journal_mode` = `wal`; write+read dalam satu transaksi → konsisten
+- [x] `checkTaskStatus(["task_fe_01"])` pada fixture 3 task (1 queued, 1 done, 1 failed) → JSON
       `narratable` ≤ 5 baris dan `counts` benar (golden fixture di `tests/fixtures/taskstore-fixture.json`)
-- [ ] DB survive restart: tulis 5 task → tutup koneksi → buka ulang → semua record masih ada;
+- [x] DB survive restart: tulis 5 task → tutup koneksi → buka ulang → semua record masih ada;
       file `data/tasks.db-wal` boleh ada (WAL normal), tidak ada tabel corrupt (`PRAGMA integrity_check = ok`)
-- [ ] Semua konten artifact > 1 KB tersimpan di filesystem, DB hanya menyimpan path (test memverifikasi)
+- [x] Semua konten artifact > 1 KB tersimpan di filesystem, DB hanya menyimpan path (test memverifikasi)
 
 ### Out of Scope
 - Antrian durable antar-proses/Redis (single-node cukup — keputusan locked di riset)
