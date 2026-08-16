@@ -12,8 +12,10 @@ pnpm -r lint
 echo "[gate-fase1] pnpm -r test"
 pnpm -r test
 
-echo "[gate-fase1] uv run --project apps/agent pytest -q"
-uv run --project apps/agent pytest -q
+echo "[gate-fase1] uv run --project apps/agent pytest -q apps/agent/tests"
+# Scope eksplisit: pytest tanpa arg dari root ikut mengoleksi test fixture E2E
+# (tests/fixtures/repo-a) yang sengaja merah — bukan milik agent.
+uv run --project apps/agent pytest -q apps/agent/tests
 
 echo "[gate-fase1] bash scripts/e2e/run-fase1.sh"
 bash scripts/e2e/run-fase1.sh

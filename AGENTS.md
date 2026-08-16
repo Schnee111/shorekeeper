@@ -18,7 +18,7 @@ pnpm -r build                     # tsc build semua package + vite build client
 pnpm -r lint                      # eslint semua package (warning = gagal)
 pnpm -r test                      # vitest / node --test semua package
 uv sync --project apps/agent      # sync deps Python
-uv run --project apps/agent pytest -q
+uv run --project apps/agent pytest -q apps/agent/tests  # scope eksplisit (fixture E2E di tests/fixtures sengaja merah)
 uv run --project apps/agent ruff check .
 bash -n scripts/gates/gate-fase1.sh
 bash scripts/gates/gate-fase1.sh  # GATE FASE 1 (harus exit 0)
