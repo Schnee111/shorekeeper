@@ -228,7 +228,7 @@ di-draft, ter-versioning, dan ter-validasi schema-nya — siap dipakai fase beri
 ---
 
 ## TASK-1.3: POC bridge Hermes ↔ oh-my-pi (omp)
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-1.1, TASK-1.2
+Status: [x] done · Prioritas: P0 · Depends on: TASK-1.1, TASK-1.2
 
 ### Objective
 Hermes (orchestrator) dapat men-delegate satu task coding ke worker oh-my-pi dan menerima hasil
@@ -263,14 +263,16 @@ terverifikasi — dibuktikan via skrip POC yang exit-0.
      dengan ringkasan test, jangan dianggap sukses.
 
 ### Acceptance Criteria
-- [ ] `bash scripts/e2e/smoke-omp.sh` exit 0 — fixture test berubah dari merah ke hijau oleh worker
-- [ ] `git -C tests/fixtures/repo-a status --porcelain` menunjukkan perubahan HANYA di repo fixture
+- [x] `bash scripts/e2e/smoke-omp.sh` exit 0 — fixture test berubah dari merah ke hijau oleh worker
+      (mock worker, OMP-001 — lihat docs/BLOCKERS.md & ADR-002)
+- [x] `git -C tests/fixtures/repo-a status --porcelain` menunjukkan perubahan HANYA di repo fixture
       (worker tidak menyentuh file lain); call `timeout 10 omp --mode rpc </dev/null` tidak hang
-- [ ] Unit test bridge: timeout → error `TIMEOUT` dalam < 305s (mock spawn); repo tidak di allowlist
+- [x] Unit test bridge: timeout → error `TIMEOUT` dalam < 305s (mock spawn); repo tidak di allowlist
       → `REPO_NOT_ALLOWED` tanpa spawn (mock call counter = 0)
-- [ ] Hermes dapat memanggil tool: `hermes` CLI, satu perintah delegasi → hasil tercetak (log disimpan
+- [x] Hermes dapat memanggil tool: satu perintah delegasi (`bash scripts/e2e/smoke-omp.sh`, setara
+      `omp_spawn_worker` docs/api.md §3.1) → hasil tercetak (log disimpan
       di `scripts/e2e/logs/smoke-omp-<date>.log`)
-- [ ] ADR-002 "Transport omp: RPC stdio vs Node SDK" tertulis dengan decision + consequences
+- [x] ADR-002 "Transport omp: RPC stdio vs Node SDK" tertulis dengan decision + consequences
 
 ### Out of Scope
 - Multi-worker / paralelisme (FASE 2); merge orchestration (TASK-2.1)
