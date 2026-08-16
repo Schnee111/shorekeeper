@@ -99,6 +99,9 @@ importers:
       better-sqlite3:
         specifier: ^11.7.0
         version: 11.10.0
+      handoff-contract:
+        specifier: workspace:*
+        version: link:../contracts
       zod:
         specifier: ^3.24.1
         version: 3.25.76

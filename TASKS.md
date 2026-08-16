@@ -340,7 +340,7 @@ voice-optimized — semua status task survive restart.
 ---
 
 ## TASK-1.5: E2E test 1 task (jalur lengkap)
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-1.3, TASK-1.4
+Status: [x] done · Prioritas: P0 · Depends on: TASK-1.3, TASK-1.4
 
 ### Objective
 Skrip `scripts/e2e/run-fase1.sh` membuktikan jalur utuh: task masuk store → orchestrator delegate ke
@@ -366,12 +366,12 @@ Skrip `scripts/e2e/run-fase1.sh` membuktikan jalur utuh: task masuk store → or
 4. Idempotensi: jalankan skrip 2× berturut → keduanya exit 0, DB kedua run fresh (bukan akumulasi 2 task).
 
 ### Acceptance Criteria
-- [ ] `bash scripts/e2e/run-fase1.sh` exit 0; dijalankan ulang → exit 0 lagi (idempotent, DB fresh per run)
-- [ ] Log memuat line `task <id> done` + `summary=<...>`; `grep -c "VERIFY_FAILED" scripts/e2e/logs/` = 0 pada run sukses
-- [ ] Test negatif: rusak fixture sementara (ubah test jadi salah) → skrip exit non-0 dan store
-      `status=failed` (di-rollback setelah verifikasi)
-- [ ] `bash scripts/gates/gate-fase1.sh` (gate penuh fase 1) exit 0 — semua komponen fase 1 hijau
-- [ ] `git -C ~/projects/shorekeeper status` bersih setelah run (artifact DB & worktree di git-ignore)
+- [x] `bash scripts/e2e/run-fase1.sh` exit 0; dijalankan ulang → exit 0 lagi (idempotent, DB fresh per run)
+- [x] Log memuat line `task <id> done` + `summary=<...>`; `grep -c "VERIFY_FAILED" scripts/e2e/logs/` = 0 pada run sukses
+- [x] Test negatif: rusak fixture sementara (ubah test jadi salah) → skrip exit non-0 dan store
+      `status=failed` (di-rollback setelah verifikasi) — `scripts/e2e/test-negative-fase1.sh`
+- [x] `bash scripts/gates/gate-fase1.sh` (gate penuh fase 1) exit 0 — semua komponen fase 1 hijau
+- [x] `git -C ~/projects/shorekeeper status` bersih setelah run (artifact DB & worktree di git-ignore)
 
 ### Out of Scope
 - Paralelisme / multi-task (FASE 2); konflik (TASK-2.3)
