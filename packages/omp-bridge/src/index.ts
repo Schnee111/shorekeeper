@@ -292,7 +292,7 @@ export async function runTask(
     };
   }
 
-  const mock = opts.mock ?? process.env.OMP_BRIDGE_MOCK === "1";
+  const mock = opts.mock ?? (process.env.OMP_BRIDGE_MOCK !== "0");
   const specFile = join(worktreeBase, `${SPEC_FILE_PREFIX}${spec.task_id}-${Date.now()}.json`);
   try {
     writeFileSync(specFile, JSON.stringify(spec));

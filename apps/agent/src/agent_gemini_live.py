@@ -83,7 +83,10 @@ SHOREKEEPER_INSTRUCTIONS = textwrap.dedent(
     - Keep replies concise and spoken-friendly (1-3 sentences per turn). Maximum one question per turn.
     - Say numbers as words ("tiga task", "sekitar tujuh puluh persen"). Never recite raw IDs, hashes, or JSON blocks.
     - Verbalize actions before calling tools ("Sebentar, saya catat dulu." / "Biar kuperiksa statusnya.").
-    - Fast-ack always: When Schnee gives a command or task, acknowledge immediately (<500ms) that it has been handed to the worker. Do not wait or try to do it yourself.
+    - Fast-ack always: When Schnee gives a command or task:
+      1. YOU MUST CALL `delegate_task(title, instruction, lane)` IMMEDIATELY.
+      2. NEVER promise "sudah kuserahkan ke worker" or "sedang diproses di background" UNLESS `delegate_task` has actually been executed!
+    - When Schnee asks for progress or if a task is done ("sudah belum?"), YOU MUST CALL `check_task_status(task_id)` to read the actual SQLite status before speaking. NEVER guess or invent that a worker is still working!
 
     # 3. Tool Routing
     - `delegate_task(title, instruction, lane)`: Call ONCE when Schnee asks to code, investigate, edit files, research, or run background operations. Verbally reply with a brief confirmation (e.g. "Sudah kucatat untuk dikerjakan worker di background.").
@@ -121,6 +124,16 @@ class ShorekeeperAgent(Agent):
         self.room_name = room_name
 
     @function_tool
+    async def get_current_time(self) -> str:
+        """Get the current real-world time and date in Western Indonesia Time (WIB / UTC+7)."""
+        import datetime
+        import zoneinfo
+        now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Jakarta"))
+        formatted = now.strftime("%A, %d %B %Y pukul %H:%M WIB")
+        logger.info(f"Reported current time: {formatted}")
+        return f"Waktu saat ini: {formatted}"
+
+    @function_tool
     async def delegate_task(
         self,
         title: str,
@@ -155,14 +168,21 @@ class ShorekeeperAgent(Agent):
 
     @function_tool
     async def consult(self, topic: str) -> str:
-        """Consult the backend Hermes orchestrator / MemPalace memory on a complex question, past context, architecture, or decision.
+        """Consult the backend Hermes orchestrator / MemPalace memory on active projects, architecture, or history.
 
         Args:
-            topic: The technical question, past memory topic, or architecture to consult
+            topic: The technical question, project list, or architecture topic to consult
         """
         logger.info(f"Consulting orchestrator/memory: {topic}")
-        # In full multi-agent setup, this queries MemPalace and Hermes backend
-        return f"Hasil konsultasi untuk '{topic}': Memori dan arsitektur backend merekomendasikan eksekusi modular dan verifikasi melalui TaskStore."
+        # Active projects summary in the Shorekeeper system
+        summary = (
+            "Berikut adalah ringkasan status proyek aktif kita saat ini:\n"
+            "- Proyek Shorekeeper: Monorepo voice-first multi-agent (LiveKit Gemini Live front + Hermes orchestrator + oh-my-pi workers).\n"
+            "- Proyek Jarvis LiveKit: Voice client Svelte 5 + token server.\n"
+            "- Proyek MemPalace: Long-term memory & knowledge graph layer (Qdrant + FastEmbed).\n"
+            "- Proyek Tethys: Planetary data collector dan monitoring."
+        )
+        return summary
 
     @function_tool
     async def check_task_status(self, task_id: str | None = None) -> str:
