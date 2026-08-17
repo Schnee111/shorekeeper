@@ -17,6 +17,7 @@ from livekit.agents import (
     JobContext,
     function_tool,
 )
+from livekit.plugins import google
 from livekit.plugins.google.realtime import RealtimeModel
 
 logger = logging.getLogger("shorekeeper-agent")
@@ -284,8 +285,15 @@ async def my_agent(ctx: JobContext):
         temperature=0.7,
     )
 
+    # Attach TTS for programmatic push notifications (session.say) without affecting realtime audio
+    try:
+        tts_model = google.TTS(voice_name=voice, api_key=gemini_api_key)
+    except Exception as te:
+        logger.warning(f"google.TTS init fallback: {te}")
+        tts_model = google.TTS(api_key=gemini_api_key)
+
     agent = ShorekeeperAgent(instructions=SHOREKEEPER_INSTRUCTIONS, room_name=ctx.room.name)
-    session = AgentSession(llm=model)
+    session = AgentSession(llm=model, tts=tts_model)
 
     await session.start(agent=agent, room=ctx.room)
     logger.info("Shorekeeper Gemini Live session started.")
