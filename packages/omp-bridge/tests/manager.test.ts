@@ -312,7 +312,7 @@ describe("WorkerManager — pre-spawn ownership hook (TASK-2.3 dependency)", () 
         if (spec.task_id === "t1") {
           t1Running = true;
           // Let t1 run for a bit, then complete
-          await new Promise((r) => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 200));
         }
         return { status: "ok", exitCode: 0, stdoutTail: "", diffSummary: "", diffFull: "", worktree: "" };
       },
@@ -330,6 +330,9 @@ describe("WorkerManager — pre-spawn ownership hook (TASK-2.3 dependency)", () 
           return owners;
         },
       },
+      onWorkerReady: (id) => {
+        store.transition(id, "done", { summary: "worker ok (stub orchestrator)" });
+      },
     });
 
     store.createTask({ task_id: "t1", lane: "debug" });
@@ -337,7 +340,7 @@ describe("WorkerManager — pre-spawn ownership hook (TASK-2.3 dependency)", () 
     await mgr.spawnTask("t1", repo, { spec: { ...SPEC, task_id: "t1" } });
     await mgr.spawnTask("t2", repo, { spec: { ...SPEC, task_id: "t2" } });
     // Small delay to let transitions propagate and pump run
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 100));
     
     // t1 should be running, t2 should be queued (deferred)
     expect(mgr.runningCount()).toBe(1);

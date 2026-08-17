@@ -468,6 +468,11 @@ export class WorkerManager {
 
         if (result.status === "ok" && result.exitCode === 0) {
           await this.handleWorkerOk(taskId, attempt, result);
+          // Merge gate (onWorkerReady) sudah selesai → pastikan onTaskTerminal
+          // (release ownership) dan event terminal fire. terminal() toleran
+          // terhadap transisi yang sudah dilakukan oleh driver di onWorkerReady
+          // (done→done → INVALID_TRANSITION, ditangkap, tetap panggil onTaskTerminal).
+          try { await this.terminal(taskId, "done", "worker-ok merged"); } catch { /* terminal swallow */ }
           return;
         }
         if (result.status === "ok") {
