@@ -1,0 +1,51 @@
+# docker-compose.otel.yaml — stack observability self-host Shorekeeper (TASK-3.1, ADR-004).
+#
+# Komponen (semua GRATIS / self-host, hard rule):
+# - otel-collector : OTLP/HTTP receiver (4318) → exporters Jaeger + Prometheus
+# - jaeger         : trace UI/API (16686), storage in-memory (staging/dev)
+# - prometheus     : metrics (9090), scrape otel-collector:8889
+#
+# Naik:  bash scripts/otel/up.sh   (deteksi port bentrok dulu, lalu healthcheck)
+# Turun: bash scripts/otel/down.sh
+#
+# Endpoint aplikasi: OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+# (service name: shorekeeper-orchestrator — lihat docs/observability.md).
+name: shorekeeper-otel
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.117.0
+    container_name: sk-otel-collector
+    command: ["--config", "/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./deploy/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4318:4318"   # OTLP/HTTP (trace + metrics) dari aplikasi
+      - "13133:13133" # health_check extension
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  jaeger:
+    image: quay.io/jaegertracing/all-in-one:1.62.0
+    container_name: sk-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"   # terima OTLP gRPC dari otel-collector
+    ports:
+      - "16686:16686" # UI + query API
+      - "4317:4317"   # OTLP gRPC (internal dari collector; expose utk debugging)
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.53.3
+    container_name: sk-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=2d"
+    volumes:
+      - ./deploy/otel/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - otel-collector
+    restart: unless-stopped

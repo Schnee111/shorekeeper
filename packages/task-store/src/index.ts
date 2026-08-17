@@ -9,4 +9,5 @@ export type {
   TouchHeartbeatResult,
   CheckTaskStatusEntry,
   CheckTaskStatusResult,
+  NotifyOutboxEntry,
 } from "./store.js";

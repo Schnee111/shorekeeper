@@ -33,7 +33,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { TaskSpec } from "handoff-contract";
+import { initObservability, setPoolSizeProvider, type ObservabilityHandle } from "shorekeeper-observability";
 import { removeWorktree, runTask, type RunTaskResult } from "./index.js";
+import { safetyAlertLine, scanSpecForbidden, specTexts } from "./safety.js";
 import { TaskStore, type TransitionMeta } from "task-store";
 
 export const MANAGER_VERSION = "0.1.0";
@@ -197,6 +199,10 @@ export class WorkerManager {
   /** Task yang sudah diberi event conflict-deferred (hindari spam per pump). */
   private deferredNotified = new Set<string>();
   private _spawnCount = 0;
+  /** Attempt terakhir per task (untuk attribute retry_count di span task.run). */
+  private attemptsByTask = new Map<string, number>();
+  /** TASK-3.1: handle OTel (null hanya bila init gagal — fail-open). */
+  private otel: ObservabilityHandle | null = null;
 
   constructor(opts: WorkerManagerOptions) {
     if (!opts.store) throw new Error("WorkerManager: store wajib diisi");
@@ -227,6 +233,14 @@ export class WorkerManager {
       onWorkerReady: opts.onWorkerReady,
       onTaskTerminal: opts.onTaskTerminal,
     };
+    // TASK-3.1: observability (idempotent per proses; fail-open bila kolektor mati).
+    try {
+      this.otel = initObservability();
+      setPoolSizeProvider(() => this.runningCount());
+    } catch {
+      // tracing tidak boleh menghentikan orkestrasi — lanjut tanpa instrumen
+      this.otel = null;
+    }
   }
 
   // -- introspection (tests & E2E) -------------------------------------------
@@ -294,6 +308,30 @@ export class WorkerManager {
       return { taskId, status: "terminal", reason: `status=${rec.status}` };
     }
     if (this.slots.has(taskId)) return { taskId, status: "running" };
+
+    // TASK-3.2 (injection): scan path terlarang SEBELUM simpan spec/claim —
+    // ditolak REPO_NOT_ALLOWED + alert, TANPA spawn (spawn counter 0).
+    const violation = scanSpecForbidden(specTexts(o.spec));
+    if (violation) {
+      this.opts.onEvent({
+        type: "conflict-rejected",
+        taskId,
+        reason: violation.code,
+        message: safetyAlertLine(taskId, violation),
+      });
+      try {
+        this.opts.store.transition(taskId, "blocked", { error: `${violation.code}: ${violation.reason} [${violation.matched.join(";")}]` });
+      } catch {
+        // sudah terminal/blocked — abaikan
+      }
+      return { taskId, status: "rejected", reason: violation.code, owners: [] };
+    }
+
+    // TASK-3.1: root span task.run + metric task_created (metadata only — privasi).
+    if (this.otel) {
+      this.otel.tracer.taskStart(taskId, { lane: rec.lane, status: rec.status });
+      this.otel.metrics.taskCreatedInc(taskId, rec.lane);
+    }
 
     // Simpan spec/repo/opts SEBELUM cek idempotensi & ownership agar checkLanded
     // dan dispatch dapat repoPath yang konsisten (pakai, jangan buat ulang state).
@@ -441,10 +479,18 @@ export class WorkerManager {
         const slot = this.slots.get(taskId) ?? { attempt: 0, pid: null };
         slot.attempt = attempt;
         this.slots.set(taskId, slot);
+        this.attemptsByTask.set(taskId, attempt);
 
         this._spawnCount += 1;
         this.opts.onEvent({ type: "dispatch", taskId, attempt, spawnSeq: this._spawnCount });
         const marker = this.writeMarker(taskId, attempt);
+
+        // TASK-3.1: span delegate_task (enqueue→ack) + worker.run (durasi worker).
+        const t0 = Date.now();
+        if (this.otel) {
+          this.otel.tracer.childStart(taskId, "delegate_task", { attempt, spawn_seq: this._spawnCount });
+          this.otel.tracer.childStart(taskId, "worker.run", { attempt });
+        }
 
         let result: RunTaskResult;
         try {
@@ -465,6 +511,25 @@ export class WorkerManager {
           };
         }
         this.lastPid.set(taskId, result.pid ?? null);
+
+        // Tutup span delegate_task + worker.run + metric durasi (metadata only).
+        if (this.otel) {
+          const durSec = (Date.now() - t0) / 1000;
+          const errMarker = result.status === "error" ? { code: result.code } : undefined;
+          this.otel.tracer.childEnd(
+            taskId,
+            "delegate_task",
+            { worker_pid: result.pid ?? null, delegate_ms: Math.round(durSec * 1000), status: result.status },
+            errMarker,
+          );
+          this.otel.tracer.childEnd(
+            taskId,
+            "worker.run",
+            { worker_pid: result.pid ?? null, attempt, status: result.status, exit_code: result.status === "ok" ? result.exitCode : null },
+            errMarker,
+          );
+          this.otel.metrics.workerDurationSeconds(durSec, taskId, spec.lane);
+        }
 
         if (result.status === "ok" && result.exitCode === 0) {
           await this.handleWorkerOk(taskId, attempt, result);
@@ -515,6 +580,7 @@ export class WorkerManager {
         if (attempt < maxAttempts) {
           const backoffMs = this.opts.retryBackoffMs[attempt - 1] ?? 1000;
           this.opts.onEvent({ type: "retry", taskId, attempt, backoffMs, reason: result.code });
+          if (this.otel) this.otel.metrics.taskRetriedInc(taskId, spec.lane);
           await this.opts.sleepMs(backoffMs);
           continue;
         }
@@ -612,6 +678,15 @@ export class WorkerManager {
         taskId,
         message: `transition ${status} gagal: ${err instanceof Error ? err.message : String(err)}`,
       });
+    }
+    // TASK-3.1: tutup root span task.run + metric terminal (metadata only).
+    if (this.otel) {
+      const rec = this.opts.store.getTask(taskId);
+      const lane = rec?.lane;
+      const retryCount = Math.max(0, (this.attemptsByTask.get(taskId) ?? 1) - 1);
+      this.otel.tracer.taskEnd(taskId, { status, retry_count: retryCount }, status === "done" ? undefined : { code: error.split(" ")[0] ?? status, message: error.slice(0, 200) });
+      if (status === "done") this.otel.metrics.taskDoneInc(taskId, lane);
+      else if (status === "failed") this.otel.metrics.taskFailedInc(taskId, lane);
     }
     this.opts.onEvent({ type: "terminal", taskId, status, error });
     const p = Promise.resolve(this.opts.onTaskTerminal?.(taskId, status))

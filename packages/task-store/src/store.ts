@@ -52,6 +52,16 @@ CREATE TABLE IF NOT EXISTS tasks (
   priority      INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+-- Outbox notifikasi (TASK-3.2 disconnect): hasil task terminal masuk sini saat
+-- "client" bisa saja hilang; reconnect → drainNotify() mengembalikan yang belum
+-- ter-deliver tepat sekali (flag delivered — at-least-once + dedupe per task_id).
+CREATE TABLE IF NOT EXISTS notify_outbox (
+  task_id      TEXT PRIMARY KEY,
+  status       TEXT NOT NULL,
+  created_at   INTEGER NOT NULL,
+  delivered    INTEGER NOT NULL DEFAULT 0,
+  delivered_at INTEGER
+);
 `;
 
 export class TaskStoreError extends Error {
@@ -283,6 +293,15 @@ export class TaskStore {
         candidate.error,
         candidate.task_id,
       );
+    // TASK-3.2 (disconnect): hasil terminal WAJIB masuk outbox notify — hasil
+    // tetap ada walau client hilang; reconnect → drainNotify (dedupe delivered).
+    if (to === "done" || to === "failed" || to === "cancelled") {
+      try {
+        this.notifyEnqueue(taskId, to);
+      } catch {
+        // outbox best-effort — tidak boleh menggagalkan transisi state machine
+      }
+    }
     return this.getTaskOrThrow(taskId);
   }
 
@@ -397,6 +416,61 @@ export class TaskStore {
     return { narratable, counts, tasks };
   }
 
+  // -- Outbox notify (TASK-3.2 disconnect/reconnect) ---------------------------
+
+  /**
+   * Catat hasil terminal (done/failed) ke outbox notifikasi — idempotent per
+   * task_id (PK). Dipanggil saat task mencapai done/failed; hasil TETAP ada
+   * walau "client" (voice session) menghilang, dan dikirim tepat sekali via
+   * drainNotify() saat reconnect (flag delivered).
+   */
+  notifyEnqueue(taskId: string, status: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO notify_outbox (task_id, status, created_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(task_id) DO UPDATE SET
+           status = excluded.status,
+           delivered = 0,
+           delivered_at = NULL`,
+      )
+      .run(taskId, status, this.nowMs());
+  }
+
+  /**
+   * Ambil notifikasi yang BELUM ter-deliver (status terminal task) — dipakai
+   * saat "reconnect" client. Setiap entry ditandai delivered=1 SEBELUM return
+   * (at-least-once + dedupe: drain kedua TIDAK mengirim ulang).
+   */
+  drainNotify(): NotifyOutboxEntry[] {
+    const rows = this.db
+      .prepare("SELECT task_id, status, created_at FROM notify_outbox WHERE delivered = 0 ORDER BY created_at ASC, task_id ASC")
+      .all() as Array<{ task_id: string; status: string; created_at: number }>;
+    if (rows.length === 0) return [];
+    const now = this.nowMs();
+    const mark = this.db.prepare("UPDATE notify_outbox SET delivered = 1, delivered_at = ? WHERE task_id = ?");
+    const tx = this.db.transaction((ids: Array<{ task_id: string; status: string; created_at: number }>) => {
+      for (const r of ids) mark.run(now, r.task_id);
+    });
+    tx(rows);
+    return rows.map((r) => ({ ...r, delivered: 1 as const, delivered_at: now }));
+  }
+
+  /** Status delivery sebuah task (test/observasi). */
+  notifyState(taskId: string): NotifyOutboxEntry | null {
+    const row = this.db.prepare("SELECT * FROM notify_outbox WHERE task_id = ?").get(taskId) as
+      | { task_id: string; status: string; created_at: number; delivered: number; delivered_at: number | null }
+      | undefined;
+    if (!row) return null;
+    return {
+      task_id: row.task_id,
+      status: row.status,
+      created_at: row.created_at,
+      delivered: row.delivered ? 1 : 0,
+      delivered_at: row.delivered_at,
+    };
+  }
+
   // -- Artifact (filesystem, DB hanya path) ------------------------------------
 
   /**
@@ -427,6 +501,16 @@ export interface CheckTaskStatusEntry {
   lane?: string;
   summary?: string;
   error?: string | null;
+}
+
+/** Entry outbox notifikasi (TASK-3.2 disconnect/reconnect). */
+export interface NotifyOutboxEntry {
+  task_id: string;
+  status: string;
+  created_at: number;
+  /** 1 = sudah di-deliver (dedupe: tidak dikirim dua kali). */
+  delivered: 0 | 1;
+  delivered_at: number | null;
 }
 
 export interface CheckTaskStatusResult {

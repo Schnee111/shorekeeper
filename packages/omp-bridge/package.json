@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "handoff-contract": "workspace:*",
+    "shorekeeper-observability": "workspace:*",
     "task-store": "workspace:*",
     "zod": "^3.24.1"
   },

@@ -22,6 +22,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { mergeTreeOverlap, revParse } from "conflict-map";
+import { getObservability } from "shorekeeper-observability";
 import { TaskStore } from "task-store";
 
 export const ORCHESTRATOR_VERSION = "0.1.0";
@@ -146,20 +147,53 @@ export class MergeOrchestrator {
   /**
    * Merge gate — antrean SEQUENTIAL (promise chain): dua task tidak pernah
    * di-merge paralel. `repoPath` = fixture repo tempat branch worker berada.
+   * TASK-3.1: span `merge` + metric merge_duration_seconds (metadata only).
    */
   mergeTask(taskId: string, repoPath: string): Promise<MergeTaskResult> {
+    const t0 = Date.now();
     const run = this.chain.then(() => {
       this.inFlightCount += 1;
+      getObservability()?.tracer.childStart(taskId, "merge", { in_flight: this.inFlightCount });
       return this.mergeTaskInner(taskId, repoPath).finally(() => {
         this.inFlightCount -= 1;
       });
     });
+    const instrumented = run.then(
+      (res) => {
+        this.endMergeSpan(taskId, res, t0, undefined);
+        return res;
+      },
+      (err) => {
+        this.endMergeSpan(taskId, null, t0, err);
+        throw err;
+      },
+    );
     // chain menelan error agar satu task gagal tidak membatalkan antrean
-    this.chain = run.then(
+    this.chain = instrumented.then(
       () => undefined,
       () => undefined,
     );
-    return run;
+    return instrumented;
+  }
+
+  /** Tutup span merge + metric durasi (fail-open: tidak pernah throw). */
+  private endMergeSpan(taskId: string, res: MergeTaskResult | null, t0: number, err: unknown): void {
+    try {
+      const otel = getObservability();
+      if (!otel) return;
+      const durSec = (Date.now() - t0) / 1000;
+      const lane = this.opts.store.getTask(taskId)?.lane;
+      const ok = res !== null && (res.status === "merged" || res.status === "empty");
+      otel.tracer.childEnd(
+        taskId,
+        "merge",
+        { merge_status: res?.status ?? "error", merge_commit: res?.mergeCommit ?? null },
+        err !== undefined ? err : ok ? undefined : { code: res?.reason?.split(" ")[0] ?? res?.status ?? "MERGE_FAILED" },
+      );
+      otel.metrics.mergeDurationSeconds(durSec, taskId, lane);
+    } catch {
+      // observasi tidak boleh menghentikan orkestrasi
+    }
   }
 
   /** Banyaknya merge yang sedang berjalan (untuk assert "tidak pernah > 1"). */
