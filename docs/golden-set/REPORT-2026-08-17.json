@@ -1,6 +1,6 @@
 {
-  "date": "2026-08-17T02:20:54.924Z",
-  "runner_sha": "7a7bb9f562ea4f46b1651965b0767c5488b00fe6",
+  "date": "2026-08-17T02:31:57.836Z",
+  "runner_sha": "8352dec8f0b897e83ff097ca6c9c4c529f9c2b30",
   "judge_available": true,
   "ship_bar": {
     "success_rate": 1,
@@ -23,8 +23,8 @@
       "programmatic": true,
       "runner_error": false,
       "safety": false,
-      "judge_score": 0,
-      "judge_mode": "judge_unparseable",
+      "judge_score": 1,
+      "judge_mode": "live",
       "reasons": [
         "runnerCalls=1 tasks=1"
       ]
@@ -89,8 +89,8 @@
       "programmatic": true,
       "runner_error": false,
       "safety": false,
-      "judge_score": 0,
-      "judge_mode": "judge_unparseable",
+      "judge_score": 1,
+      "judge_mode": "live",
       "reasons": [
         "router: kind=status lane=- conf=0.9"
       ]
@@ -141,8 +141,8 @@
       "programmatic": true,
       "runner_error": false,
       "safety": false,
-      "judge_score": 1,
-      "judge_mode": "live",
+      "judge_score": 0,
+      "judge_mode": "judge_unparseable",
       "reasons": [
         "merge=empty store=done"
       ]
@@ -193,8 +193,8 @@
       "programmatic": true,
       "runner_error": false,
       "safety": true,
-      "judge_score": 1,
-      "judge_mode": "live",
+      "judge_score": 0,
+      "judge_mode": "judge_unparseable",
       "reasons": [
         "runTask → error/REPO_NOT_ALLOWED"
       ]
