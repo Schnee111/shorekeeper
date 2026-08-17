@@ -723,16 +723,16 @@ task success/retry/durasi, export OTLP ke kolektor self-host — trace TANPA isi
 6. ADR-004 "Stack observability: OTel + Jaeger + Prometheus self-host" di `docs/adr/0004-observability.md`.
 
 ### Acceptance Criteria
-- [ ] `docker compose -f docker-compose.otel.yaml up -d` → kolektor, Jaeger (16686), Prometheus
+- [x] `docker compose -f docker-compose.otel.yaml up -d` → kolektor, Jaeger (16686), Prometheus
       (9090) healthcheck `curl -sf localhost:9090/-/healthy` exit 0
-- [ ] Jalankan `bash scripts/e2e/run-fase1.sh` dengan env OTel → 1 trace id dengan span
+- [x] Jalankan `bash scripts/e2e/run-fase1.sh` dengan env OTel → 1 trace id dengan span
       `task.run` → `delegate_task` → `worker.run` → `merge` ter-query via Jaeger API
       (`curl "localhost:16686/api/traces?service=shorekeeper-orchestrator"` memuat trace)
-- [ ] `curl localhost:9090/api/v1/query?query=task_done_total` mengembalikan nilai ≥ 1 setelah E2E
-- [ ] Test: eksport ke endpoint mati → orkestrasi tetap selesai exit 0 (hanya warning di log)
-- [ ] `grep -ri "<transcript\|user_said" packages/ apps/ scripts/` KOSONG di attribute OTel (privasi)
-- [ ] `bash -n scripts/gates/gate-fase3.sh` exit 0
-- [ ] `docs/adr/0004-observability.md` ada; `docs/observability.md` memuat contoh query trace & metric
+- [x] `curl localhost:9090/api/v1/query?query=task_done_total` mengembalikan nilai ≥ 1 setelah E2E
+- [x] Test: eksport ke endpoint mati → orkestrasi tetap selesai exit 0 (hanya warning di log)
+- [x] `grep -ri "<transcript\|user_said" packages/ apps/ scripts/` KOSONG di attribute OTel (privasi)
+- [x] `bash -n scripts/gates/gate-fase3.sh` exit 0
+- [x] `docs/adr/0004-observability.md` ada; `docs/observability.md` memuat contoh query trace & metric
 
 ### Out of Scope
 - Instrumentasi voice pipeline LiveKit (fase voice; catat: TTFT/TTS field kosong untuk realtime)
@@ -781,13 +781,13 @@ perilaku yang terdokumentasi — tidak ada failure mode yang "kebetulan".
 6. Dokumentasikan tiap skenario di `docs/EDGE-CASES.md`: fakta platform, perilaku kita, test ref.
 
 ### Acceptance Criteria
-- [ ] `pnpm -r test -- tests/edge` exit 0 — tiap skenario di atas punya ≥ 1 test pass
-- [ ] Test injection: spec berisi `~/.ssh`, `C:\Windows`, `/etc/passwd` → semua ditolak
+- [x] `pnpm -r test -- tests/edge` exit 0 — tiap skenario di atas punya ≥ 1 test pass
+- [x] Test injection: spec berisi `~/.ssh`, `C:\Windows`, `/etc/passwd` → semua ditolak
       `REPO_NOT_ALLOWED`, spawn counter = 0
-- [ ] Test idempotency: delegate ganda task_id sama → store 1 task, spawn count 1 (mock)
-- [ ] Test restart: seed `running` basi → `recoverStale` → `failed/STALE_HEARTBEAT`, data lain utuh
-- [ ] Test disconnect: consumer mati → task selesai → reconnect → status tampil, delivered flag = 1
-- [ ] `docs/EDGE-CASES.md` ada, tiap section memuat "Platform fact / Our behavior / Test ref"
+- [x] Test idempotency: delegate ganda task_id sama → store 1 task, spawn count 1 (mock)
+- [x] Test restart: seed `running` basi → `recoverStale` → `failed/STALE_HEARTBEAT`, data lain utuh
+- [x] Test disconnect: consumer mati → task selesai → reconnect → status tampil, delivered flag = 1
+- [x] `docs/EDGE-CASES.md` ada, tiap section memuat "Platform fact / Our behavior / Test ref"
 
 ### Out of Scope
 - Edge case voice murni (barge-in audio, VAD, noise) — fase voice; catat saja di EDGE-CASES.md
@@ -836,12 +836,12 @@ Golden set 20 kasus di `docs/golden-set/` + runner `scripts/eval/golden-run.sh` 
    (prompt/model) harus disertai diff eval.
 
 ### Acceptance Criteria
-- [ ] `scripts/eval/lint-golden.sh` (schema check) exit 0: 20 file valid, rubric lengkap
-- [ ] `bash scripts/eval/golden-run.sh` exit 0 (ship bar tercapai) ATAU exit 1 dengan REPORT JSON
+- [x] `scripts/eval/lint-golden.sh` (schema check) exit 0: 20 file valid, rubric lengkap
+- [x] `bash scripts/eval/golden-run.sh` exit 0 (ship bar tercapai) ATAU exit 1 dengan REPORT JSON
       berisi breakdown per kasus + skor total (bila < 85%)
-- [ ] REPORT JSON memuat: total, per-kasus (id, pass/fail, score, reasons), `runner_sha`, safety count
-- [ ] Uji mekanik: injeksi 1 kasus rusak (expected_outcome salah) → skor turun sesuai & exit 1
-- [ ] Tidak ada kasus tanpa rubric (lint memaksa)
+- [x] REPORT JSON memuat: total, per-kasus (id, pass/fail, score, reasons), `runner_sha`, safety count
+- [x] Uji mekanik: injeksi 1 kasus rusak (expected_outcome salah) → skor turun sesuai & exit 1
+- [x] Tidak ada kasus tanpa rubric (lint memaksa)
 
 ### Out of Scope
 - Simulasi voice LLM-driven (scenarios.yaml live) — fase voice / TESTING.md §simulasi
@@ -889,14 +889,14 @@ Status: [x] done · Prioritas: P0 · Depends on: TASK-3.1, TASK-3.3
    `scripts/ops/restore-db.sh` + dokumentasi RTO/RPO singkat di DEPLOYMENT.md.
 
 ### Acceptance Criteria
-- [ ] `docs/DEPLOYMENT.md` ada, setiap langkah memuat command persis + expected output; checklist
+- [x] `docs/DEPLOYMENT.md` ada, setiap langkah memuat command persis + expected output; checklist
       verifikasi ter-centang secara eksplisit (bukan asumsi)
-- [ ] `.env.example` ada; `grep -ri "api[_-]*key\|secret" .env.example` hanya placeholder, tidak ada nilai nyata
-- [ ] `bash -n scripts/e2e/smoke-prod.sh scripts/ops/backup-db.sh scripts/ops/restore-db.sh` exit 0
-- [ ] Smoke di lingkungan staging (WSL): service palsu di-up → `bash scripts/e2e/smoke-prod.sh` exit 0
+- [x] `.env.example` ada; `grep -ri "api[_-]*key\|secret" .env.example` hanya placeholder, tidak ada nilai nyata
+- [x] `bash -n scripts/e2e/smoke-prod.sh scripts/ops/backup-db.sh scripts/ops/restore-db.sh` exit 0
+- [x] Smoke di lingkungan staging (WSL): service palsu di-up → `bash scripts/e2e/smoke-prod.sh` exit 0
       (trace id muncul di Jaeger; store berisi 1 done)
-- [ ] Uji backup/restore: backup → destroy DB → restore → `PRAGMA integrity_check` = ok & data utuh
-- [ ] `bash scripts/gates/gate-fase3.sh` exit 0 — GATE PRODUKSI PENUH HIJAU
+- [x] Uji backup/restore: backup → destroy DB → restore → `PRAGMA integrity_check` = ok & data utuh
+- [x] `bash scripts/gates/gate-fase3.sh` exit 0 — GATE PRODUKSI PENUH HIJAU
 
 ### Out of Scope
 - Deploy aktual ke VPS produksi (butuh akses user — stop condition; dokumen ini menyiapkan)
