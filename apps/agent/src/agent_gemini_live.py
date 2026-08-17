@@ -262,6 +262,45 @@ async def my_agent(ctx: JobContext):
     await session.start(agent=agent, room=ctx.room)
     logger.info("Shorekeeper Gemini Live session started.")
 
+    # Background Poller for Proactive Task Completion Notification (TASK-3.2 / Voice Push)
+    async def outbox_notification_loop():
+        while True:
+            await asyncio.sleep(2.0)
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.row_factory = sqlite3.Row
+                    rows = conn.execute(
+                        """
+                        SELECT n.task_id, n.status, t.user_intent, t.summary
+                        FROM notify_outbox n
+                        JOIN tasks t ON n.task_id = t.task_id
+                        WHERE n.delivered = 0 AND t.session_room = ?
+                        ORDER BY n.created_at ASC
+                        """,
+                        (ctx.room.name,),
+                    ).fetchall()
+                    for r in rows:
+                        tid = r["task_id"]
+                        summary = r["summary"] or f"Task {tid} telah selesai."
+                        logger.info(f"Proactively notifying completed task: {tid}")
+                        # Mark delivered
+                        conn.execute(
+                            "UPDATE notify_outbox SET delivered = 1, delivered_at = ? WHERE task_id = ?",
+                            (int(time.time() * 1000), tid),
+                        )
+                        conn.commit()
+                        # Inject proactive message into voice session
+                        proactive_text = f"Schnee, update untuk task {r['user_intent']}: {summary}"
+                        try:
+                            await session.generate_reply(text=proactive_text)
+                        except Exception as ge:
+                            logger.warning(f"Failed to trigger proactive voice speech: {ge}")
+            except Exception as e:
+                logger.debug(f"Outbox poll error: {e}")
+
+    task_ref = asyncio.create_task(outbox_notification_loop())
+    ctx.add_shutdown_callback(lambda: task_ref.cancel())
+
 
 if __name__ == '__main__':
     from livekit.agents import cli
