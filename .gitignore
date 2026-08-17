@@ -9,6 +9,8 @@ __pycache__/
 *.tsbuildinfo
 scripts/e2e/logs/
 .eslintcache
-# Fixture repo-a adalah nested git repo yang di-bootstrap deterministik
+# Fixture repo-a/b/c adalah nested git repo yang di-bootstrap deterministik
 # (scripts/e2e/bootstrap-fixture.sh) — internal commit-nya tidak masuk monorepo.
 tests/fixtures/repo-a/
+tests/fixtures/repo-b/
+tests/fixtures/repo-c/
