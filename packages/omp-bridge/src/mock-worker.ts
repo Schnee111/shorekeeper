@@ -25,6 +25,8 @@ export const NOT_IMPLEMENTED_DOUBLE = "raise NotImplementedError";
 export const DOUBLE_IMPL = "return x * 2";
 export const TYPO_HELLO = "Helllo";
 export const FIXED_HELLO = "Hello";
+export const MUL_FN = "\n\ndef mul(a: int, b: int) -> int:\n    return a * b\n";
+export const SUB_FN = "\n\ndef sub(a: int, b: int) -> int:\n    return a - b\n";
 
 export interface MockFixResult {
   changedFiles: string[];
@@ -51,7 +53,12 @@ export function applyMockFix(worktree: string, spec: Pick<TaskSpec, "task_id" | 
       changedFiles.push("lib/math.py");
     }
     if (!src.includes("def mul") && /mul|kali/.test(OBJ)) {
-      writeFileSync(mathPath, `${src}\n\ndef mul(a: int, b: int) -> int:\n    return a * b\n`);
+      writeFileSync(mathPath, `${src}${MUL_FN}`);
+      changedFiles.push("lib/math.py");
+      src = readFileSync(mathPath, "utf8");
+    }
+    if (!src.includes("def sub") && /\bsub\b|kurang/.test(OBJ)) {
+      writeFileSync(mathPath, `${src}${SUB_FN}`);
       changedFiles.push("lib/math.py");
     }
   }

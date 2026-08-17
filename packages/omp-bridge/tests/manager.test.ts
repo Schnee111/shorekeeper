@@ -20,6 +20,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { TaskStore } from "task-store";
 import type { TaskSpec } from "handoff-contract";
+import { OwnershipMap } from "conflict-map";
 import { WorkerManager, type WorkerManagerEvent, type RunnerImpl, type WorkerManagerOptions } from "../src/manager.js";
 
 const tmpDirs: string[] = [];
@@ -302,14 +303,16 @@ describe("WorkerManager — idempotensi & zombie", () => {
 describe("WorkerManager — pre-spawn ownership hook (TASK-2.3 dependency)", () => {
   it("overlap task 2 → tetap queued sampai owner selesai; force → ditolak CONFLICT_DETECTED", async () => {
     const base = tmp();
-    let t1Done = false;
-    let resolveT1: () => void;
-    const t1Promise = new Promise<void>((r) => { resolveT1 = r; });
+    let t1Running = false;
+    const runnerCalls: string[] = [];
     
     const { store, repo, mgr, evts } = makeManager(base, {
       runner: async (spec) => {
+        runnerCalls.push(spec.task_id);
         if (spec.task_id === "t1") {
-          await t1Promise;
+          t1Running = true;
+          // Let t1 run for a bit, then complete
+          await new Promise((r) => setTimeout(r, 50));
         }
         return { status: "ok", exitCode: 0, stdoutTail: "", diffSummary: "", diffFull: "", worktree: "" };
       },
@@ -327,22 +330,18 @@ describe("WorkerManager — pre-spawn ownership hook (TASK-2.3 dependency)", () 
           return owners;
         },
       },
-      onWorkerReady: (id) => {
-        if (id === "t1") {
-          t1Done = true;
-          resolveT1!();
-        }
-        store.transition(id, "done", { summary: "worker ok (stub orchestrator)" });
-      },
     });
 
     store.createTask({ task_id: "t1", lane: "debug" });
     store.createTask({ task_id: "t2", lane: "debug" });
     await mgr.spawnTask("t1", repo, { spec: { ...SPEC, task_id: "t1" } });
     await mgr.spawnTask("t2", repo, { spec: { ...SPEC, task_id: "t2" } });
-    // Small delay to let transitions propagate
-    await new Promise((r) => setTimeout(r, 10));
-    expect(mgr.queuedCount()).toBe(1); // t2 menunggu owner (t1) selesai
+    // Small delay to let transitions propagate and pump run
+    await new Promise((r) => setTimeout(r, 50));
+    
+    // t1 should be running, t2 should be queued (deferred)
+    expect(mgr.runningCount()).toBe(1);
+    expect(mgr.queuedCount()).toBe(1);
     expect(evts.some((e) => e.type === "conflict-deferred" && e.taskId === "t2" && e.owners?.includes("t1"))).toBe(true);
 
     // user memaksa spawn bentrok → TOLAK CONFLICT_DETECTED + daftar pemilik
@@ -351,10 +350,58 @@ describe("WorkerManager — pre-spawn ownership hook (TASK-2.3 dependency)", () 
     expect(forced.reason).toBe("CONFLICT_DETECTED");
     expect(forced.owners).toEqual(["t1"]);
 
-    // owner selesai → release → task 2 jalan
+    // Wait for both tasks to complete
     await mgr.drain();
-    await mgr.notifyReleased();
-    await mgr.drain();
+    expect(store.getTask("t1")!.status).toBe("done");
     expect(store.getTask("t2")!.status).toBe("done");
+    expect(runnerCalls).toEqual(["t1", "t2"]); // t1 ran first, then t2
+  });
+});
+
+describe("WorkerManager × OwnershipMap — pre-spawn integrasi (TASK-2.3)", () => {
+  it("task overlap ter-defer sampai owner release (OwnershipMap nyata + release via onTaskTerminal)", async () => {
+    const base = tmp();
+    const store = new TaskStore({ dbPath: join(base, "tasks.db") });
+    const repo = makeRepo(join(base, "repo"));
+    const evts: WorkerManagerEvent[] = [];
+
+    // OwnershipMap NYATA: aktif hanya bila task running di store
+    const own = new OwnershipMap({ isActive: (id) => store.getTask(id)?.status === "running" });
+
+    const mgr = new WorkerManager({
+      store,
+      allowlist: [repo],
+      artifactDirBase: join(base, "artifacts"),
+      mockMarkerDir: join(base, "spawns"),
+      ownership: own,
+      onWorkerReady: (id) => {
+        store.transition(id, "done", { summary: "worker ok (stub orchestrator)" });
+      },
+      onTaskTerminal: (id) => {
+        own.release(id); // release saat task terminal → owner bebas
+      },
+      runner: async () => {
+        await new Promise((r) => setTimeout(r, 20));
+        return { status: "ok", exitCode: 0, stdoutTail: "", diffSummary: "", diffFull: "", worktree: "" };
+      },
+      onEvent: (e) => evts.push(e),
+    });
+
+    store.createTask({ task_id: "o1", lane: "debug" });
+    store.createTask({ task_id: "o2", lane: "debug" });
+    expect(own.claimFiles("o1", ["lib/math.py"])).toEqual({ status: "ok" });
+    expect(own.claimFiles("o2", ["lib/math.py"])).toEqual({ status: "conflict", conflictsWith: ["o1"] });
+
+    await mgr.spawnTask("o1", repo, { spec: { ...SPEC, task_id: "o1" } });
+    await mgr.spawnTask("o2", repo, { spec: { ...SPEC, task_id: "o2" } });
+    expect(mgr.queuedCount()).toBe(1); // o2 menunggu owner (o1) selesai
+    expect(evts.some((e) => e.type === "conflict-deferred" && e.taskId === "o2" && e.owners?.includes("o1"))).toBe(true);
+
+    await mgr.drain();
+    expect(store.getTask("o1")!.status).toBe("done");
+    expect(store.getTask("o2")!.status).toBe("done");
+    // counter & log deteksi tercatat di ownership map
+    expect(own.conflictCount()).toBeGreaterThanOrEqual(1);
+    expect(own.conflictLog()[0]).toContain("conflict-detected");
   });
 });
