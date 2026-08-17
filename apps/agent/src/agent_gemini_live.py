@@ -292,9 +292,13 @@ async def my_agent(ctx: JobContext):
                         # Inject proactive message into voice session
                         proactive_text = f"Schnee, update untuk task {r['user_intent']}: {summary}"
                         try:
-                            await session.generate_reply(text=proactive_text)
+                            await session.say(text=proactive_text)
                         except Exception as ge:
-                            logger.warning(f"Failed to trigger proactive voice speech: {ge}")
+                            logger.warning(f"Failed to trigger proactive voice speech via say: {ge}")
+                            try:
+                                await session.generate_reply(user_input=proactive_text)
+                            except Exception as gre:
+                                logger.warning(f"Failed to trigger generate_reply: {gre}")
             except Exception as e:
                 logger.debug(f"Outbox poll error: {e}")
 
