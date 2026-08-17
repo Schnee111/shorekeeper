@@ -33,9 +33,10 @@ log "stage=$STAGE — reset fixture repo-a/b/c ke buggy-initial"
 bash scripts/e2e/bootstrap-fixture.sh all
 
 STAGE=db-fresh
-log "stage=$STAGE — DB + ownership fresh"
+log "stage=$STAGE — DB + ownership + worktrees fresh"
 rm -f "$DB" "$DB-wal" "$DB-shm"
 rm -f "$ROOT/data/ownership.json"
+rm -rf "$ROOT/data/worktrees"
 
 STAGE=pipeline
 log "stage=$STAGE — skenario A (paralel) + B (konflik) + C (gagal berulang)"

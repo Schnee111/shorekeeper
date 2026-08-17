@@ -18,7 +18,7 @@
  *   Push ditolak → retry 3× backoff → `failed` + instruksi manual.
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { mergeTreeOverlap, revParse } from "conflict-map";
@@ -348,9 +348,16 @@ export class MergeOrchestrator {
       runGit(repoPath, ["worktree", "add", "--detach", wt, branch]);
       return await this.runVerifierAt(wt);
     } finally {
+      // pola removeWorktree bridge: remove → fallback rm -rf + prune (idempotent;
+      // verifier worktree sementara tidak boleh bocor ke end-state E2E).
       try {
         runGit(repoPath, ["worktree", "remove", "--force", wt]);
       } catch {
+        try {
+          rmSync(wt, { recursive: true, force: true });
+        } catch {
+          // best-effort
+        }
         runGitSafe(repoPath, ["worktree", "prune"]);
       }
     }
