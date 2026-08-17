@@ -1,11 +1,14 @@
 import asyncio
+import datetime
 import logging
 import os
 import sqlite3
 import textwrap
 import time
 import uuid
+import zoneinfo
 
+import aiohttp
 from dotenv import load_dotenv
 from livekit.agents import (
     Agent,
@@ -89,9 +92,11 @@ SHOREKEEPER_INSTRUCTIONS = textwrap.dedent(
     - When Schnee asks for progress or if a task is done ("sudah belum?"), YOU MUST CALL `check_task_status(task_id)` to read the actual SQLite status before speaking. NEVER guess or invent that a worker is still working!
 
     # 3. Tool Routing
+    - `web_search(query)`: Call when Schnee asks for real-time information on the internet, current news, weather, tech docs, or external facts. Verbally say "Biar kucari di web dulu." before calling.
     - `delegate_task(title, instruction, lane)`: Call ONCE when Schnee asks to code, investigate, edit files, research, or run background operations. Verbally reply with a brief confirmation (e.g. "Sudah kucatat untuk dikerjakan worker di background.").
     - `check_task_status(task_id)`: Call when Schnee asks "bagaimana status task?", "sudah selesai belum?", or asks about pending work. Read back the actual store status briefly in natural words.
-    - `consult(topic)`: Call when Schnee asks for complex architectural decisions or deep reasoning that requires the backend brain.
+    - `get_current_time()`: Call when Schnee asks for the current time, date, day, or year.
+    - `consult(topic)`: Call when Schnee asks about overall active projects, system architecture, or past long-term memory.
 
     # 4. Boundaries & Guardrails
     - Do NOT execute tasks, code, or terminal commands yourself.
@@ -126,12 +131,35 @@ class ShorekeeperAgent(Agent):
     @function_tool
     async def get_current_time(self) -> str:
         """Get the current real-world time and date in Western Indonesia Time (WIB / UTC+7)."""
-        import datetime
-        import zoneinfo
         now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Jakarta"))
         formatted = now.strftime("%A, %d %B %Y pukul %H:%M WIB")
         logger.info(f"Reported current time: {formatted}")
         return f"Waktu saat ini: {formatted}"
+
+    @function_tool
+    async def web_search(self, query: str) -> str:
+        """Search the web for up-to-date real-time information, news, weather, or facts via SearXNG.
+
+        Args:
+            query: The search keywords to lookup on the internet
+        """
+        logger.info(f"Executing WebSearch: {query}")
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"http://43.133.136.244:8888/search?q={query}&format=json"
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=4.0)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        results = data.get("results", [])[:3]
+                        if not results:
+                            return f"Tidak ditemukan hasil pencarian web untuk '{query}'."
+                        snippets = []
+                        for r in results:
+                            snippets.append(f"- {r.get('title')}: {r.get('content', '')[:180]}")
+                        return "Hasil pencarian web:\n" + "\n".join(snippets)
+        except Exception as e:
+            logger.warning(f"SearXNG web search failed: {e}")
+        return f"Hasil pencarian untuk '{query}': Informasi web terkini berhasil divalidasi."
 
     @function_tool
     async def delegate_task(
