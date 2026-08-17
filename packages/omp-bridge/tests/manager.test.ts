@@ -303,15 +303,13 @@ describe("WorkerManager — idempotensi & zombie", () => {
 describe("WorkerManager — pre-spawn ownership hook (TASK-2.3 dependency)", () => {
   it("overlap task 2 → tetap queued sampai owner selesai; force → ditolak CONFLICT_DETECTED", async () => {
     const base = tmp();
-    let t1Running = false;
     const runnerCalls: string[] = [];
     
     const { store, repo, mgr, evts } = makeManager(base, {
       runner: async (spec) => {
         runnerCalls.push(spec.task_id);
         if (spec.task_id === "t1") {
-          t1Running = true;
-          // Let t1 run for a bit, then complete
+          // t1 jalan cukup lama agar t2 ter-observasi queued (deferred)
           await new Promise((r) => setTimeout(r, 200));
         }
         return { status: "ok", exitCode: 0, stdoutTail: "", diffSummary: "", diffFull: "", worktree: "" };
