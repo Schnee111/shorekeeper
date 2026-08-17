@@ -1,0 +1,19 @@
+# shorekeeper-agent.service — LiveKit agent (apps/agent, Python via uv).
+[Unit]
+Description=Shorekeeper LiveKit voice agent (G3)
+After=network-online.target shorekeeper-orchestrator.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/shorekeeper
+EnvironmentFile=/opt/shorekeeper/.env
+ExecStart=/usr/local/bin/uv run --project apps/agent python -m agent
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

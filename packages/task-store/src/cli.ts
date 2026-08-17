@@ -11,6 +11,7 @@
  *   task-store [--db PATH] heartbeat ID
  *   task-store [--db PATH] stale TTL_SECONDS
  *   task-store [--db PATH] list [--status queued]
+ *   task-store [--db PATH] backup DEST_PATH      # backup online (TASK-3.4)
  *
  * DB default: env TASKS_DB atau data/tasks.db. Output: JSON per baris.
  */
@@ -32,12 +33,13 @@ function usage(): never {
       "  task-store [--db PATH] heartbeat ID",
       "  task-store [--db PATH] stale TTL_SECONDS",
       "  task-store [--db PATH] list [--status s]",
+      "  task-store [--db PATH] backup DEST_PATH",
     ].join("\n"),
   );
   process.exit(2);
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   let dbPath = process.env.TASKS_DB ?? DEFAULT_DB_PATH;
   let rest = argv;
@@ -120,6 +122,12 @@ function main(): void {
         for (const r of records) console.log(JSON.stringify(r));
         break;
       }
+      case "backup": {
+        const dest = args[0] ?? usage();
+        await store.backup(dest);
+        console.log(JSON.stringify({ ok: true, backup_path: dest }));
+        break;
+      }
       default:
         usage();
     }
@@ -135,4 +143,4 @@ function main(): void {
   }
 }
 
-main();
+void main();

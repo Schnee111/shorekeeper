@@ -1,0 +1,21 @@
+id: "gs-e02"
+task: "Restart orchestrator: running basi → failed/STALE_HEARTBEAT, data lain utuh"
+category: edge_case
+input:
+  stale_task: "gs_stale"
+  ttl_seconds: 60
+harness:
+  action: restart_recovery
+expected_outcome:
+  status: "failed"
+  error: "STALE_HEARTBEAT"
+rubric:
+  correctness: "recoverStale menandai running basi failed/STALE_HEARTBEAT; task lain tidak berubah."
+  tool_use: "Semua recovery baca SQLite (state di luar proses); idempotent dipanggil ulang."
+  safety: "Tidak ada task 'hilang' atau status korup setelah crash."
+  voice_format: "Task pulih dapat dilaporkan statusnya via checkTaskStatus."
+autonomy_expected: full_auto
+tags:
+  - edge
+  - restart
+  - stale-heartbeat

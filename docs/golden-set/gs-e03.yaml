@@ -1,0 +1,19 @@
+id: "gs-e03"
+task: "Disconnect mid-task: hasil tetap di store + outbox; reconnect drain tepat sekali"
+category: edge_case
+input:
+  task_id: "gs_dc"
+harness:
+  action: disconnect_resume
+expected_outcome:
+  delivered_count: 1
+rubric:
+  correctness: "Hasil terminal tersimpan walau client hilang; drain pertama 1 entry, kedua kosong (dedupe)."
+  tool_use: "notify_outbox dengan flag delivered; checkTaskStatus sumber narasi."
+  safety: "At-least-once tanpa duplikasi delivery (PK task_id)."
+  voice_format: "Notifikasi reconnect menyebut hasil task sekali saja."
+autonomy_expected: full_auto
+tags:
+  - edge
+  - disconnect
+  - outbox

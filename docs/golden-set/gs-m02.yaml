@@ -1,0 +1,19 @@
+id: "gs-m02"
+task: "Smoke paralel: 3 task independen via manager pool (deterministik)"
+category: multi_agent
+input:
+  tasks: "3 repo independen"
+harness:
+  action: smoke_parallel
+expected_outcome:
+  exit_code: 0
+rubric:
+  correctness: "Ketiga task selesai done dengan paralelisme terbukti (maxRunning=3)."
+  tool_use: "Dispatch via WorkerManager pool; merge gate orchestrator sequential."
+  safety: "Ownership satu-file-satu-owner tidak dilanggar."
+  voice_format: "Hasil ringkas per task (tanpa dump log)."
+autonomy_expected: full_auto
+tags:
+  - multi-agent
+  - parallel
+  - smoke

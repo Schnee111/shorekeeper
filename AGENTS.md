@@ -28,6 +28,14 @@ bash scripts/e2e/smoke-parallel.sh   # smoke worker manager (3 task paralel)
 bash scripts/e2e/smoke-conflict.sh   # smoke conflict detection (2 task bentrok)
 bash scripts/gates/gate-fase2.sh  # GATE FASE 2 (regresi F1 + E2E paralel, exit 0)
 bash scripts/e2e/run-fase2.sh     # E2E fase 2 (skenario A/B/C)
+bash scripts/eval/lint-golden.sh  # lint golden set (20 kasus, rubric lengkap)
+bash scripts/eval/golden-run.sh   # golden suite ≥ 85% + 0 critical safety (ship bar)
+bash scripts/otel/up.sh           # stack observability self-host (OTel+Jaeger+Prometheus)
+bash scripts/otel/down.sh         # turunkan stack observability
+bash scripts/e2e/smoke-prod.sh    # smoke instalasi "produksi" (service+trace Jaeger)
+bash scripts/ops/backup-db.sh     # backup online task store SQLite
+bash scripts/ops/restore-db.sh    # restore task store dari backup
+bash scripts/gates/gate-fase3.sh  # GATE FASE 3 (regresi F1-2 + golden + smoke, exit 0)
 ```
 
 ## Layout
@@ -40,10 +48,16 @@ packages/omp-bridge/ bridge Hermes -> worker (mock/omp adapter, worktree, timeou
 packages/task-store/ SQLite WAL store + state machine + CLI
 packages/conflict-map/ ownership map + pre-merge merge-tree check (FASE-2)
 packages/merge-orchestrator/ merge gate tunggal: verifier + squash sequential + approval (FASE-2)
+packages/observability/ OTel SDK setup + fail-open exporter + sanitize privasi (FASE-3)
 scripts/gates/      gate-fase*.sh
-scripts/e2e/        run-fase*.sh, smoke-omp.sh, smoke-parallel.sh, smoke-conflict.sh (+ logs/ git-ignored)
-docs/               PRD, ARCHITECTURE, api.md, adr/, agents/, runbooks/
-tests/              fixtures/, unit/, behavioral/, e2e/, edge/
+scripts/e2e/        run-fase*.sh, smoke-omp.sh, smoke-parallel.sh, smoke-conflict.sh, smoke-prod.sh (+ logs/ git-ignored)
+scripts/eval/       golden runner: lint-golden.sh, golden-run.sh (grade.mjs), test-corrupt.sh (FASE-3)
+scripts/otel/       up.sh/down.sh stack observability self-host (FASE-3)
+scripts/ops/        backup-db.sh / restore-db.sh task store (FASE-3)
+deploy/             otel/ (collector+prometheus config), systemd/ (unit VPS) (FASE-3)
+docs/               PRD, ARCHITECTURE, api.md, adr/, agents/, runbooks/, observability.md,
+                    EDGE-CASES.md, DEPLOYMENT.md, golden-set/ (kasus + REPORT-<date>.json)
+tests/              fixtures/, unit/, behavioral/, e2e/, edge/ (tests edge di packages/*/tests/edge)
 data/               tasks.db + artifacts/ + ownership.json (git-ignored)
 ```
 
@@ -64,6 +78,29 @@ data/               tasks.db + artifacts/ + ownership.json (git-ignored)
   pre-merge `git merge-tree --name-only` di orchestrator; log
   `conflict-detected <a> <b> files=[...]` + counter ownership.json.
   Detection over resolution: false positive > false negative.
+
+## Konvensi FASE 3 (production: observability, edge cases, golden, deploy)
+
+- Observability (ADR-004): OTel SDK → OTLP → otel-collector → Jaeger +
+  Prometheus, semua self-host (GRATIS). Span per task: root `task.run` →
+  `delegate_task`, `worker.run`, `merge`; attributes METADATA SAJA —
+  isi percakapan TIDAK PERNAH masuk trace (sanitize FORBIDDEN_ATTR_KEYS di
+  packages/observability; gate meng-audit). Fail-open: kolektor mati →
+  orkestrasi tetap jalan (warning log).
+- Nama span & instrumen = kontrak versioned (snake_case): task_created_total,
+  task_done_total, task_failed_total, task_retried_total,
+  conflict_detected_total, worker_duration_seconds, merge_duration_seconds,
+  worker_pool_size. Jangan ubah in-place tanpa bump (prinsip api.md).
+- Golden set (docs/golden-set/gs-*.yaml, 20 kasus) = gerbang regresi & ship:
+  ship bar LOCKED ≥85% success + 0 critical safety (jangan turunkan bar;
+  audit rubrik bila gagal 2×). Kasus produksi gagal → tambah ke golden set
+  (flywheel). Lint wajib sebelum run (rubric lengkap, distribusi kategori).
+- Edge cases (docs/EDGE-CASES.md): state di store, bukan sesi; hasil terminal
+  masuk outbox notify (delivered flag — dedupe); spec berisi path terlarang
+  ditolak REPO_NOT_ALLOWED pre-spawn (spawn counter 0).
+- Backup/restore task store: scripts/ops/backup-db.sh (online) +
+  restore-db.sh; rollback = stop unit + restore DB satu file (uji restore
+  sebelum traffic nyata).
 
 ## Konvensi kode — CORRECT vs WRONG
 

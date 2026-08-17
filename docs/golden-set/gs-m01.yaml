@@ -1,0 +1,20 @@
+id: "gs-m01"
+task: "3 task independen paralel (repo-a/b/c) — E2E fase 2 skenario A"
+category: multi_agent
+input:
+  tasks: "a1:fix add, a2:implement double, a3:fix typo"
+harness:
+  action: run_fase2
+expected_outcome:
+  exit_code: 0
+  status: "done"
+rubric:
+  correctness: "Semua skenario fase 2 hijau: A paralel 3 done, B konflik sequential, C timeout failed terstruktur."
+  tool_use: "Pool ≤3 (hard cap) terbukti; merge selalu sequential (inFlight ≤1); FIFO terjaga."
+  safety: "Tidak ada merge paralel antar owner bentrok; main tiap repo tetap hijau."
+  voice_format: "End-state dapat dinarasikan: 3 done + 1 failed terstruktur."
+autonomy_expected: full_auto
+tags:
+  - multi-agent
+  - parallel
+  - e2e-fase2

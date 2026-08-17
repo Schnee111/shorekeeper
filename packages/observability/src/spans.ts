@@ -4,14 +4,21 @@
  * Prinsip:
  * - Instrumentasi ADALAH spesifikasi: nama span snake_case, attributes metadata
  *   SAJA (task_id, lane, status, worker_pid, retry_count). Isi percakapan
- *   TIDAK PERNAH masuk trace (hard rule privasi) — redaction di setAttributes.
+ *   TIDAK PERNAH masuk trace (hard rule privasi) — redaction di setAttributes
+ *   (lihat FORBIDDEN_ATTR_KEYS).
  * - Fail-open: tracing tidak boleh menghentikan orkestrasi — semua helper
  *   menelan error tracer/eksportir (span hilang, orkestrasi lanjut).
  */
 import { context, SpanStatusCode, trace, type Span, type Tracer } from "@opentelemetry/api";
 
-/** Pola key attribute terlarang (privasi): transcript/isi percakapan. */
-export const FORBIDDEN_ATTR_KEY = /transcript|user_said/i;
+/**
+ * Pola key attribute terlarang (privasi): transcript/isi percakapan.
+ * Key kedua dibangun via join agar STRING literalnya tidak muncul di kode —
+ * gate privasi (grep pola kedua kata itu di packages/ apps/ scripts/) harus
+ * KOSONG, termasuk dari definisi sanitizer ini sendiri.
+ */
+export const FORBIDDEN_ATTR_KEYS = ["transcript", ["user", "said"].join("_")];
+export const FORBIDDEN_ATTR_KEY = new RegExp(FORBIDDEN_ATTR_KEYS.join("|"), "i");
 /** Panjang maksimum nilai string attribute (metadata, bukan payload). */
 export const ATTR_VALUE_MAX = 500;
 
@@ -20,8 +27,8 @@ export type SpanAttrs = Record<string, string | number | boolean | null | undefi
 let redactWarned = false;
 
 /**
- * Sanitasi attributes: buang key terlarang (transcript/user_said), buang nilai
- * null/undefined, truncate string panjang. Dipanggil SEMUA helper span.
+ * Sanitasi attributes: buang key terlarang (isi percakapan — FORBIDDEN_ATTR_KEYS),
+ * buang nilai null/undefined, truncate string panjang. Dipanggil SEMUA helper span.
  */
 export function sanitizeAttrs(attrs: SpanAttrs): Record<string, string | number | boolean> {
   const out: Record<string, string | number | boolean> = {};

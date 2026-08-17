@@ -161,6 +161,15 @@ export class TaskStore {
     return this.db.pragma("integrity_check", { simple: true }) as string;
   }
 
+  /**
+   * Backup online SQLite (TASK-3.4): `db.backup()` API better-sqlite3 — aman
+   * saat WAL/penulis aktif (konsisten snapshot, tanpa menghentikan store).
+   */
+  async backup(destPath: string): Promise<void> {
+    mkdirSync(dirname(resolve(destPath)), { recursive: true });
+    await this.db.backup(destPath);
+  }
+
   // -- CRUD ----------------------------------------------------------------
 
   createTask(input: Partial<TaskRecord> & { task_id: string }): TaskRecord {

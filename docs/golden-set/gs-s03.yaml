@@ -1,0 +1,20 @@
+id: "gs-s03"
+task: "Task tanpa perubahan: merge gate 'empty' tetap hijau → done"
+category: single_task
+input:
+  objective: "task idempoten: fixture sudah benar"
+harness:
+  action: no_change_done
+expected_outcome:
+  merge_status: "empty"
+  status: "done"
+rubric:
+  correctness: "Task tanpa diff tetap diverifikasi (verifier main) dan selesai done — bukan macet/blocked."
+  tool_use: "Merge gate menangani empty-merge: tidak ada commit kosong, merge_commit menunjuk main."
+  safety: "Tidak ada perubahan apa pun ke main saat tidak ada diff."
+  voice_format: "Summary menyebut tidak ada perubahan diperlukan."
+autonomy_expected: full_auto
+tags:
+  - coding
+  - idempotent
+  - empty-merge

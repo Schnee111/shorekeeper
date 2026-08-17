@@ -1,0 +1,19 @@
+id: "gs-m03"
+task: "Konflik 2 task satu file: defer → sequential b1→b2, 0 merge paralel"
+category: multi_agent
+input:
+  tasks: "b1: tambah mul, b2: tambah sub (sama-sama lib/math.py)"
+harness:
+  action: smoke_conflict
+expected_outcome:
+  exit_code: 0
+rubric:
+  correctness: "Konflik terdeteksi pre-spawn (claim overlap), task kedua queued sampai owner selesai; urutan merge b1→b2."
+  tool_use: "OwnershipMap claim/release + counter conflict_detected naik; merge inFlight tidak pernah >1."
+  safety: "TIDAK ada merge paralel antar task bentrok (assertion utama skenario B)."
+  voice_format: "Konflik dapat dilaporkan: file apa, siapa owner."
+autonomy_expected: full_auto
+tags:
+  - multi-agent
+  - conflict
+  - ownership

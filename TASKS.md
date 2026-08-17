@@ -688,7 +688,7 @@ rubrik/kasus (jangan turunkan bar), (d) deployment membutuhkan perubahan infra y
 ---
 
 ## TASK-3.1: OTel observability + quality gate Fase 3
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-2.4
+Status: [x] done · Prioritas: P0 · Depends on: TASK-2.4
 
 ### Objective
 Orkestrasi ter-instrumentasi OpenTelemetry: trace lengkap per task (handoff→worker→merge), metrics
@@ -748,7 +748,7 @@ task success/retry/durasi, export OTLP ke kolektor self-host — trace TANPA isi
 ---
 
 ## TASK-3.2: Edge cases production (ketahanan)
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-2.4
+Status: [x] done · Prioritas: P0 · Depends on: TASK-2.4
 
 ### Objective
 Skenario edge case produksi (disconnect, timeout, injection, race) punya test deterministik dan
@@ -802,7 +802,7 @@ perilaku yang terdokumentasi — tidak ada failure mode yang "kebetulan".
 ---
 
 ## TASK-3.3: Golden test suite (20 kasus + runner + ship bar)
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-2.4, TASK-3.2
+Status: [x] done · Prioritas: P0 · Depends on: TASK-2.4, TASK-3.2
 
 ### Objective
 Golden set 20 kasus di `docs/golden-set/` + runner `scripts/eval/golden-run.sh` dengan ship bar
@@ -857,7 +857,7 @@ Golden set 20 kasus di `docs/golden-set/` + runner `scripts/eval/golden-run.sh` 
 ---
 
 ## TASK-3.4: Deployment guide + smoke produksi
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-3.1, TASK-3.3
+Status: [x] done · Prioritas: P0 · Depends on: TASK-3.1, TASK-3.3
 
 ### Objective
 `docs/DEPLOYMENT.md` yang executable (command persis, env, systemd, rollback) + skrip
