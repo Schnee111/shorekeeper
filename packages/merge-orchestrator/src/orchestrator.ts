@@ -86,6 +86,13 @@ export interface OrchestratorOptions {
   committerEmail?: string;
   sleepMs?: (ms: number) => Promise<void>;
   onEvent?: (evt: OrchestratorEvent) => void;
+  /**
+   * Task ditutup oleh merge gate — hook lifecycle (TASK-2.3): release ownership
+   * pada done/failed (task blocked menahan klaimnya — masih bisa di-retry),
+   * lalu pump ulang antrean worker yang ter-defer. Dipanggil SEBELUM transisi
+   * store pada sukses merge (release terjadi saat perubahan ter-merge).
+   */
+  onTaskClosed?: (taskId: string, status: "done" | "failed" | "blocked") => void;
   now?: () => number;
 }
 
@@ -127,6 +134,7 @@ export class MergeOrchestrator {
       committerEmail: opts.committerEmail ?? "orchestrator@shorekeeper.local",
       sleepMs: opts.sleepMs ?? delay,
       onEvent: opts.onEvent ?? (() => {}),
+      onTaskClosed: opts.onTaskClosed ?? (() => {}),
       now: opts.now ?? (() => Date.now()),
     };
   }
@@ -276,6 +284,7 @@ export class MergeOrchestrator {
           `PUSH_REJECTED setelah ${push.attempts} percobaan: ${push.message}. ` +
           `Manual: git -C ${repoPath} push ${this.opts.remoteName} main && tandai task done manual.`;
         store.transition(taskId, "failed", { error: msg });
+        this.opts.onTaskClosed(taskId, "failed"); // release ownership → pump antrean ter-defer
         this.emit({ type: "push", taskId, ok: false, detail: msg });
         return { status: "push_rejected", taskId, mergeCommit: sha, reason: msg };
       }
@@ -313,6 +322,9 @@ export class MergeOrchestrator {
     if (summary.length === 0 || countWordsLocal(summary) > 200) {
       return this.reject(taskId, "SUMMARY_TOO_LONG");
     }
+    // release ownership SEBELUM transisi done: task ter-defer (TASK-2.3) baru
+    // boleh jalan setelah perubahan owner benar-benar ter-merge ke main.
+    this.opts.onTaskClosed(taskId, "done");
     store.transition(taskId, "done", { summary, artifact_dir: artifactDir });
     this.emit({ type: "done", taskId, detail: `merge_commit=${short ?? "(none)"}` });
     return short
