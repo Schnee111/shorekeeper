@@ -486,7 +486,7 @@ merge sequential ke main — dengan approval sebelum push ke remote.
 ---
 
 ## TASK-2.2: Worker manager (spawn/kill/retry/timeout)
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-1.4, TASK-2.1
+Status: [x] done · Prioritas: P0 · Depends on: TASK-1.4, TASK-2.1
 
 ### Objective
 Worker manager mengelola siklus hidup 2–3 worker omp paralel: spawn dengan contract, heartbeat,
@@ -518,14 +518,14 @@ timeout, retry idempoten, kill on runaway — semua state tercatat di task store
 5. CLU: `scripts/e2e/smoke-parallel.sh` sementara (3 task independen kecil) sampai E2E penuh TASK-2.4.
 
 ### Acceptance Criteria
-- [ ] `pnpm --filter omp-bridge test` exit 0: pool tidak pernah > 3 running (mock spawn, counter),
+- [x] `pnpm --filter omp-bridge test` exit 0: pool tidak pernah > 3 running (mock spawn, counter),
       antrean FIFO benar
-- [ ] Unit test timeout: worker mock sleep 10 s dengan timeout 1 s → `failed/TIMEOUT` < 2 s, slot
+- [x] Unit test timeout: worker mock sleep 10 s dengan timeout 1 s → `failed/TIMEOUT` < 2 s, slot
       kembali tersedia; retry count naik sesuai policy
-- [ ] Unit test recovery: seed 2 task `running` basi → `recoverStale()` → keduanya `failed/STALE_HEARTBEAT`
-- [ ] Idempotensi: simulasikan worker selesai tapi report hilang → re-dispatch menemukan diff sudah
+- [x] Unit test recovery: seed 2 task `running` basi → `recoverStale()` → keduanya `failed/STALE_HEARTBEAT`
+- [x] Idempotensi: simulasikan worker selesai tapi report hilang → re-dispatch menemukan diff sudah
       landing → task `done` TANPA eksekusi ulang (mock spawn count tidak bertambah)
-- [ ] `bash scripts/e2e/smoke-parallel.sh` exit 0 dengan 3 task independen di 3 fixture repo
+- [x] `bash scripts/e2e/smoke-parallel.sh` exit 0 dengan 3 task independen di 3 fixture repo
 
 ### Out of Scope
 - Conflict detection (TASK-2.3) — manager hanya jaga slot & lifecycle
@@ -541,7 +541,7 @@ timeout, retry idempoten, kill on runaway — semua state tercatat di task store
 ---
 
 ## TASK-2.3: Conflict detection (file ownership + merge-tree)
-Status: [ ] pending · Prioritas: P1 · Depends on: TASK-2.1, TASK-2.2
+Status: [x] done · Prioritas: P1 · Depends on: TASK-2.1, TASK-2.2
 
 ### Objective
 Bentrok file antar worker terdeteksi SEBELUM merge: ownership map (one-file-one-owner) + pre-merge
@@ -569,15 +569,15 @@ check `git merge-tree` — task bentrok di-block, tidak pernah di-merge paralel.
    + counter store (dipakai TASK-3.1 metrics).
 
 ### Acceptance Criteria
-- [ ] Unit test ownership: claim 2 task pada file sama → `conflict` terdeteksi; release → claim
+- [x] Unit test ownership: claim 2 task pada file sama → `conflict` terdeteksi; release → claim
       kedua berhasil; file berbeda → `ok`
-- [ ] Unit test pre-spawn: 2 task overlap → task kedua tetap `queued` sampai task pertama `done`
+- [x] Unit test pre-spawn: 2 task overlap → task kedua tetap `queued` sampai task pertama `done`
       (fake timers/scheduler)
-- [ ] Unit test merge-tree: fixture 2 branch yang mengedit file sama → `git merge-tree --name-only`
+- [x] Unit test merge-tree: fixture 2 branch yang mengedit file sama → `git merge-tree --name-only`
       memuat file itu (test membuktikan deteksi), tidak ada merge paralel yang terjadi
-- [ ] Shell smoke: `bash scripts/e2e/smoke-conflict.sh` exit 0 — dibangun 2 task bentrok, hasil akhir
+- [x] Shell smoke: `bash scripts/e2e/smoke-conflict.sh` exit 0 — dibangun 2 task bentrok, hasil akhir
       1 done + 1 blocked/queued TANPA merge paralel; log memuat `conflict-detected`
-- [ ] Tidak ada perubahan API task store (kontrak Fase 1 utuh): `git diff` lintas fase hanya menambah file
+- [x] Tidak ada perubahan API task store (kontrak Fase 1 utuh): `git diff` lintas fase hanya menambah file
 
 ### Out of Scope
 - Auto-merge 3-way / resolver otomatis (tetap sekuesialisasi + manual orchestrator)
@@ -593,7 +593,7 @@ check `git merge-tree` — task bentrok di-block, tidak pernah di-merge paralel.
 ---
 
 ## TASK-2.4: E2E test 2–3 task paralel
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-2.1, TASK-2.2, TASK-2.3
+Status: [x] done · Prioritas: P0 · Depends on: TASK-2.1, TASK-2.2, TASK-2.3
 
 ### Objective
 `scripts/e2e/run-fase2.sh` membuktikan: 3 task independen diproses paralel (max 3), di-merge
@@ -618,12 +618,12 @@ sequential dengan verifikasi, konflik terdeteksi — semua exit code bermakna da
    hanya berisi commit dari task yang AC hijau, worktree worker dibersihkan.
 
 ### Acceptance Criteria
-- [ ] `bash scripts/e2e/run-fase2.sh` exit 0; log memuat `scenario A/B/C` masing-masing dengan result
-- [ ] Assertion script (node) memverifikasi: skenario A → 3 `done` + 3 merge commit; skenario B → 0
+- [x] `bash scripts/e2e/run-fase2.sh` exit 0; log memuat `scenario A/B/C` masing-masing dengan result
+- [x] Assertion script (node) memverifikasi: skenario A → 3 `done` + 3 merge commit; skenario B → 0
       merge paralel & `conflict-detected` ≥ 1 kali; skenario C → `failed` dengan `error` non-kosong
-- [ ] Jalankan ulang → exit 0 lagi (deterministik, DB/artifacts fresh per run)
-- [ ] `bash scripts/gates/gate-fase2.sh` exit 0 (termasuk regresi fase 1)
-- [ ] Tidak ada worker yang menulis di luar 3 fixture repo (`git status` tiap repo hanya memuat
+- [x] Jalankan ulang → exit 0 lagi (deterministik, DB/artifacts fresh per run)
+- [x] `bash scripts/gates/gate-fase2.sh` exit 0 (termasuk regresi fase 1)
+- [x] Tidak ada worker yang menulis di luar 3 fixture repo (`git status` tiap repo hanya memuat
       perubahan yang diharapkan)
 
 ### Out of Scope

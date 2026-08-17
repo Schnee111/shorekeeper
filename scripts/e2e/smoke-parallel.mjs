@@ -98,6 +98,12 @@ const orch = new MergeOrchestrator({
   verifierCmd: VERIFY_CMD,
   artifactDirBase: join(ROOT, "data", "artifacts"),
   worktreeBase: join(ROOT, "data", "worktrees", "merge"),
+  onTaskClosed: (taskId, status) => {
+    if (status === "done" || status === "failed") {
+      own.release(taskId);
+      mgr.notifyReleased();
+    }
+  },
 });
 
 let maxInflightMerge = 0;
@@ -120,8 +126,10 @@ const mgr = new WorkerManager({
       curInflight -= 1;
     }
   },
-  onTaskTerminal: (taskId) => {
-    own.release(taskId);
+  onTaskTerminal: (taskId, status) => {
+    // done: release dilakukan orchestrator SEBELUM transisi done (onTaskClosed) —
+    // jangan release ganda. failed tanpa merge: release agar antrean ter-defer jalan.
+    if (status === "failed") own.release(taskId);
   },
   onEvent: (e) => {
     if (["dispatch", "worker-ok", "terminal", "conflict-deferred", "slot-freed"].includes(e.type)) {
