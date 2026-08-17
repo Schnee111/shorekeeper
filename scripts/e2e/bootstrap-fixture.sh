@@ -2,7 +2,7 @@
 # bootstrap-fixture.sh — buat/reset deterministik fixture repos (TASK-1.3, TASK-2.4).
 #
 # repo-a: mini git repo Python, lib/math.py fungsi `add` SALAH + pytest merah (bug).
-# repo-b: lib/feature.py fungsi `double` NotImplementedError (feature kecil).
+# repo-b: lib/feature.py functions `double` NotImplementedError (feature kecil).
 # repo-c: lib/greet.py typo "Helllo" (typo fix).
 #
 # State awal tiap repo di-tag `buggy-initial`; setiap pemanggilan me-reset repo
@@ -13,6 +13,29 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT="$PWD"
+
+# Hapus semua worktree (kecuali worktree utama) + branch worker/* agar reset
+# deterministik. Harus dipanggil sebelum `reset --hard` agar tidak ada worktree
+# yang menghadang (stale detached worktree, conflict pada `worktree add` berikut).
+cleanup_worktrees() {
+  local FIX="$1"
+  # hapus branch worker/* (jika masih ada setelah run sebelumnya)
+  git -C "$FIX" branch --list 'worker/*' 2>/dev/null | sed 's/^[ *]*//' | while IFS= read -r br; do
+    git -C "$FIX" branch -D "$br" 2>/dev/null || true
+  done
+  # hapus worktree tambahan (bukan worktree utama). `worktree prune` tidak selalu
+  # menghapus direktori — pakai `remove --force` eksplisit.
+  local main_root
+  main_root="$(git -C "$FIX" rev-parse --show-toplevel 2>/dev/null || true)"
+  git -C "$FIX" worktree list --porcelain 2>/dev/null \
+    | awk '/^worktree /{print $2}' \
+    | while IFS= read -r wt; do
+        [ -z "$wt" ] && continue
+        [ "$wt" = "$main_root" ] && continue
+        git -C "$FIX" worktree remove --force "$wt" 2>/dev/null || true
+      done
+  git -C "$FIX" worktree prune 2>/dev/null || true
+}
 
 bootstrap_repo_a() {
   local FIX="$ROOT/tests/fixtures/repo-a"
@@ -54,14 +77,14 @@ PY
     git -C "$FIX" tag buggy-initial
     echo "[bootstrap-fixture] repo-a dibuat (buggy-initial)"
   else
-    git -C "$FIX" worktree prune
+    cleanup_worktrees "$FIX"
     if git -C "$FIX" rev-parse --verify -q buggy-initial >/dev/null; then
       git -C "$FIX" reset -q --hard buggy-initial
     else
       git -C "$FIX" reset -q --hard HEAD
     fi
     git -C "$FIX" clean -qfd
-    echo "[bootstrap-fixture] repo-a di-reset ke buggy-initial"
+    echo "[bootstrap-fixture] repo-a di-reset ke buggy-initial (worktree/branch worker bersih)"
   fi
 }
 
@@ -105,14 +128,14 @@ PY
     git -C "$FIX" tag buggy-initial
     echo "[bootstrap-fixture] repo-b dibuat (buggy-initial)"
   else
-    git -C "$FIX" worktree prune
+    cleanup_worktrees "$FIX"
     if git -C "$FIX" rev-parse --verify -q buggy-initial >/dev/null; then
       git -C "$FIX" reset -q --hard buggy-initial
     else
       git -C "$FIX" reset -q --hard HEAD
     fi
     git -C "$FIX" clean -qfd
-    echo "[bootstrap-fixture] repo-b di-reset ke buggy-initial"
+    echo "[bootstrap-fixture] repo-b di-reset ke buggy-initial (worktree/branch worker bersih)"
   fi
 }
 
@@ -152,14 +175,14 @@ PY
     git -C "$FIX" tag buggy-initial
     echo "[bootstrap-fixture] repo-c dibuat (buggy-initial)"
   else
-    git -C "$FIX" worktree prune
+    cleanup_worktrees "$FIX"
     if git -C "$FIX" rev-parse --verify -q buggy-initial >/dev/null; then
       git -C "$FIX" reset -q --hard buggy-initial
     else
       git -C "$FIX" reset -q --hard HEAD
     fi
     git -C "$FIX" clean -qfd
-    echo "[bootstrap-fixture] repo-c di-reset ke buggy-initial"
+    echo "[bootstrap-fixture] repo-c di-reset ke buggy-initial (worktree/branch worker bersih)"
   fi
 }
 
