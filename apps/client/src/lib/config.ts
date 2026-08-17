@@ -21,30 +21,38 @@ export const VOICES_ENDPOINT = '/jarvis-livekit/voices';
 export const VOICE_STORAGE_KEY = 'shorekeeper-voice';
 export const MODEL_STORAGE_KEY = 'shorekeeper-model';
 
-/** Static voice registry — used only if the /voices endpoint fails. */
+/** Static voice registry — Native Gemini Live Realtime Voices (All 30 Celestial Voices) */
 export const FALLBACK_VOICES: VoiceOption[] = [
-  { id: 'sarah', label: 'Sarah', desc: 'EN · Voice', default: true },
-  { id: 'zeta', label: 'Zeta', desc: 'Calm · ID/EN', default: false },
-  { id: 'gura', label: 'Gura', desc: 'Energetic · EN', default: false },
-  { id: 'adrian', label: 'Adrian', desc: 'EN · Male', default: false },
-  { id: 'hannah', label: 'Hannah', desc: 'EN · Female', default: false },
-  { id: 'raiden', label: 'Raiden', desc: 'EN · Female', default: false },
-  { id: 'megan', label: 'Megan', desc: 'EN · Female', default: false },
-  { id: 'natasha', label: 'Natasha', desc: 'EN · Female', default: false },
-  { id: 'tifa', label: 'Tifa', desc: 'EN · Female', default: false },
-  { id: 'emma', label: 'Emma', desc: 'EN · Female', default: false },
-  { id: 'furina', label: 'Furina', desc: 'EN · Female', default: false },
-  { id: 'luna', label: 'Luna', desc: 'EN · Female', default: false },
-  { id: 'jade', label: 'Jade', desc: 'EN · Female', default: false },
-  { id: 'nilou', label: 'Nilou', desc: 'EN · Female', default: false },
-  { id: 'marin', label: 'Marin', desc: 'EN · Female', default: false },
-  { id: 'reze', label: 'Reze', desc: 'EN · Female', default: false },
-  { id: 'makima', label: 'Makima', desc: 'EN · Female', default: false },
-  { id: 'arlecchino', label: 'Arlecchino', desc: 'EN · Female', default: false },
-  { id: 'yoimiya', label: 'Yoimiya', desc: 'EN · Female', default: false },
-  { id: 'jp1', label: 'JP Voice 1', desc: 'JP · Female', default: false },
-  { id: 'jp2', label: 'JP Voice 2', desc: 'JP · Female', default: false },
-  { id: 'ano', label: 'Ano', desc: 'JP · Female', default: false },
+  { id: 'Aoede', label: 'Aoede', desc: 'Warm · Melodic', default: true },
+  { id: 'Achernar', label: 'Achernar', desc: 'Bright · Resonant', default: false },
+  { id: 'Achird', label: 'Achird', desc: 'Crisp · Balanced', default: false },
+  { id: 'Algenib', label: 'Algenib', desc: 'Calm · Grounded', default: false },
+  { id: 'Algieba', label: 'Algieba', desc: 'Warm · Steady', default: false },
+  { id: 'Alnilam', label: 'Alnilam', desc: 'Deep · Dynamic', default: false },
+  { id: 'Autonoe', label: 'Autonoe', desc: 'Gentle · Expressive', default: false },
+  { id: 'Callirrhoe', label: 'Callirrhoe', desc: 'Smooth · Radiant', default: false },
+  { id: 'Charon', label: 'Charon', desc: 'Deep · Authoritative', default: false },
+  { id: 'Despina', label: 'Despina', desc: 'Smooth · Conversational', default: false },
+  { id: 'Enceladus', label: 'Enceladus', desc: 'Light · Cheerful', default: false },
+  { id: 'Erinome', label: 'Erinome', desc: 'Polished · Clear', default: false },
+  { id: 'Fenrir', label: 'Fenrir', desc: 'Direct · Strong', default: false },
+  { id: 'Gacrux', label: 'Gacrux', desc: 'Mature · Grounded', default: false },
+  { id: 'Iapetus', label: 'Iapetus', desc: 'Rich · Steady', default: false },
+  { id: 'Kore', label: 'Kore', desc: 'Calm · Clear', default: false },
+  { id: 'Laomedeia', label: 'Laomedeia', desc: 'Soft · Airy', default: false },
+  { id: 'Leda', label: 'Leda', desc: 'Gentle · Soothing', default: false },
+  { id: 'Orus', label: 'Orus', desc: 'Bold · Confident', default: false },
+  { id: 'Puck', label: 'Puck', desc: 'Playful · Energetic', default: false },
+  { id: 'Pulcherrima', label: 'Pulcherrima', desc: 'Vibrant · Melodic', default: false },
+  { id: 'Rasalgethi', label: 'Rasalgethi', desc: 'Warm · Deep', default: false },
+  { id: 'Sadachbia', label: 'Sadachbia', desc: 'Focused · Direct', default: false },
+  { id: 'Sadaltager', label: 'Sadaltager', desc: 'Quiet · Refined', default: false },
+  { id: 'Schedar', label: 'Schedar', desc: 'Firm · Resonant', default: false },
+  { id: 'Sulafat', label: 'Sulafat', desc: 'Gentle · Harmonic', default: false },
+  { id: 'Umbriel', label: 'Umbriel', desc: 'Subtle · Calm', default: false },
+  { id: 'Vindemiatrix', label: 'Vindemiatrix', desc: 'Clear · Eloquent', default: false },
+  { id: 'Zephyr', label: 'Zephyr', desc: 'Bright · Expressive', default: false },
+  { id: 'Zubenelgenubi', label: 'Zubenelgenubi', desc: 'Deep · Classic', default: false },
 ];
 
 export interface ModelOption {
@@ -55,13 +63,8 @@ export interface ModelOption {
 }
 
 export const MODEL_OPTIONS: ModelOption[] = [
-  { id: '', label: 'Gemini 3.6 Flash High (Default)', desc: 'Smartest · ~1.3s TTFT', default: true },
-  { id: 'ag/gemini-3.6-flash-medium', label: 'Gemini 3.6 Flash Medium', desc: 'Balanced · ~1.0s TTFT' },
-  { id: 'ag/gemini-3.6-flash-low', label: 'Gemini 3.6 Flash Low', desc: 'Ultra Fast · Low latency' },
-  { id: 'ag/gemini-3.7-flash-high', label: 'Gemini 3.7 Flash High', desc: 'Next-gen · Smartest' },
-  { id: 'ag/gemini-3.7-flash-medium', label: 'Gemini 3.7 Flash Medium', desc: 'Next-gen · Balanced' },
-  { id: 'ag/gemini-3.7-flash-low', label: 'Gemini 3.7 Flash Low', desc: 'Next-gen · Ultra Fast' },
-  { id: 'qd/qmodel_38max', label: 'Qoder 38max', desc: 'Sub-second · ~0.9s TTFT' },
+  { id: 'gemini-3.1-flash-live-preview', label: 'Gemini 3.1 Flash Live (Native)', desc: 'Realtime Audio · Complex Reasoning', default: true },
+  { id: 'gemini-live-2.5-flash-native-audio', label: 'Gemini 2.5 Flash Live', desc: 'Realtime Audio · Low Latency' },
 ];
 
 /** Human-friendly labels for tool progress rows, keyed by tool name. */

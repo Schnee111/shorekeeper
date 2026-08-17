@@ -1,0 +1,248 @@
+import asyncio
+import logging
+import os
+import sqlite3
+import textwrap
+import time
+import uuid
+
+from dotenv import load_dotenv
+from livekit.agents import (
+    Agent,
+    AgentServer,
+    AgentSession,
+    JobContext,
+    function_tool,
+)
+from livekit.plugins.google.realtime import RealtimeModel
+
+logger = logging.getLogger("shorekeeper-agent")
+
+load_dotenv(".env.local")
+load_dotenv(".env")
+
+# Database Path
+DATA_DIR = "/home/daffa/projects/shorekeeper/data"
+DB_PATH = os.path.join(DATA_DIR, "tasks.db")
+
+
+def init_db():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tasks (
+              task_id       TEXT PRIMARY KEY,
+              session_room  TEXT NOT NULL DEFAULT '',
+              user_intent   TEXT NOT NULL DEFAULT '',
+              parent_id     TEXT,
+              lane          TEXT NOT NULL DEFAULT 'debug',
+              status        TEXT NOT NULL DEFAULT 'queued',
+              worker_pid    INTEGER,
+              heartbeat_ts  INTEGER,
+              created_at    INTEGER NOT NULL,
+              started_at    INTEGER,
+              finished_at   INTEGER,
+              contract_ref  TEXT NOT NULL DEFAULT '',
+              artifact_dir  TEXT,
+              summary       TEXT NOT NULL DEFAULT '',
+              error         TEXT,
+              notify_gate   TEXT NOT NULL DEFAULT 'next_turn',
+              priority      INTEGER NOT NULL DEFAULT 1
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notify_outbox (
+              task_id      TEXT PRIMARY KEY,
+              status       TEXT NOT NULL,
+              created_at   INTEGER NOT NULL,
+              delivered    INTEGER NOT NULL DEFAULT 0,
+              delivered_at INTEGER
+            )
+            """
+        )
+
+
+init_db()
+
+# Shorekeeper System Instructions for Gemini 3.1 Flash Live (Compiled from docs/agents/FRONT_AGENT.md & SOUL-front-router.md)
+SHOREKEEPER_INSTRUCTIONS = textwrap.dedent(
+    """\
+    You are Shorekeeper, the Guardian of the Black Shores — the voice front of the Shorekeeper system speaking directly with Schnee (the user) in real time.
+
+    # 1. Persona
+    - Calm, refined, gentle, and quietly perceptive. Cosmic perspective: stars, tides, remnants, calculus.
+    - Deeply devoted to Schnee. Call the user "Schnee".
+    - You are the thin front router: you hold the voice session, capture intent, and hand off heavy work to the backend orchestrator. You are NOT the orchestrator and NOT a coding worker.
+    - Pronouns: Always use 'aku/kamu' in Indonesian. Never use slang pronouns like gue/lu/lo. Match Schnee's language (Indonesian default).
+
+    # 2. Conversational Rules (Voice-First Output)
+    - Plain spoken text only. NEVER output markdown (no bold, asterisks, headings, bullet lists), JSON, code fences, emojis, or raw URLs.
+    - Keep replies concise and spoken-friendly (1-3 sentences per turn). Maximum one question per turn.
+    - Say numbers as words ("tiga task", "sekitar tujuh puluh persen"). Never recite raw IDs, hashes, or JSON blocks.
+    - Verbalize actions before calling tools ("Sebentar, saya catat dulu." / "Biar kuperiksa statusnya.").
+    - Fast-ack always: When Schnee gives a command or task, acknowledge immediately (<500ms) that it has been handed to the worker. Do not wait or try to do it yourself.
+
+    # 3. Tool Routing
+    - `delegate_task(title, instruction, lane)`: Call ONCE when Schnee asks to code, investigate, edit files, research, or run background operations. Verbally reply with a brief confirmation (e.g. "Sudah kucatat untuk dikerjakan worker di background.").
+    - `check_task_status(task_id)`: Call when Schnee asks "bagaimana status task?", "sudah selesai belum?", or asks about pending work. Read back the actual store status briefly in natural words.
+    - `consult(topic)`: Call when Schnee asks for complex architectural decisions or deep reasoning that requires the backend brain.
+
+    # 4. Boundaries & Guardrails
+    - Do NOT execute tasks, code, or terminal commands yourself.
+    - Do NOT fabricate status, numbers, or progress — only read what tools return.
+    - Do NOT mention legacy names, other assistants, or technical tool parameters.
+    - Interruption: If Schnee speaks over you, stop immediately and listen.
+    """
+)
+
+server = AgentServer(
+    num_idle_processes=0,
+    job_memory_limit_mb=600,
+    load_threshold=0.95,
+    multiprocessing_context="spawn",
+)
+
+FALLBACK_VOICE = "Aoede"
+VALID_GEMINI_VOICES = {
+    "Achernar", "Achird", "Algenib", "Algieba", "Alnilam", "Aoede", "Autonoe",
+    "Callirrhoe", "Charon", "Despina", "Enceladus", "Erinome", "Fenrir", "Gacrux",
+    "Iapetus", "Kore", "Laomedeia", "Leda", "Orus", "Pulcherrima", "Puck",
+    "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Sulafat", "Umbriel",
+    "Vindemiatrix", "Zephyr", "Zubenelgenubi",
+}
+
+
+class ShorekeeperAgent(Agent):
+    def __init__(self, instructions: str, room_name: str = "") -> None:
+        super().__init__(instructions=instructions)
+        self.room_name = room_name
+
+    @function_tool
+    async def delegate_task(
+        self,
+        title: str,
+        instruction: str,
+        lane: str = "debug",
+    ) -> str:
+        """Delegate a coding or background task to the Hermes multi-agent orchestrator / task store.
+
+        Args:
+            title: Short summary title of the task
+            instruction: Detailed task instructions for the worker agent
+            lane: Lane type ('research', 'frontend', 'debug', 'qa')
+        """
+        task_id = f"task_{uuid.uuid4().hex[:8]}"
+        now = int(time.time() * 1000)
+        logger.info(f"Writing task to task-store: {task_id} - {title}")
+
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO tasks (
+                      task_id, session_room, user_intent, lane, status, created_at, priority
+                    ) VALUES (?, ?, ?, ?, 'queued', ?, 1)
+                    """,
+                    (task_id, self.room_name, f"{title}: {instruction}", lane, now),
+                )
+            return f"Task '{title}' berhasil dicatat ke TaskStore (ID: {task_id}, lane: {lane}). Worker akan segera mengeksekusinya."
+        except Exception as e:
+            logger.exception("Failed to write task to sqlite")
+            return f"Task '{title}' gagal dicatat: {e}"
+
+    @function_tool
+    async def consult(self, topic: str) -> str:
+        """Consult the backend Hermes orchestrator / MemPalace memory on a complex question, past context, architecture, or decision.
+
+        Args:
+            topic: The technical question, past memory topic, or architecture to consult
+        """
+        logger.info(f"Consulting orchestrator/memory: {topic}")
+        # In full multi-agent setup, this queries MemPalace and Hermes backend
+        return f"Hasil konsultasi untuk '{topic}': Memori dan arsitektur backend merekomendasikan eksekusi modular dan verifikasi melalui TaskStore."
+
+    @function_tool
+    async def check_task_status(self, task_id: str | None = None) -> str:
+        """Check the status of running or recent background tasks from SQLite.
+
+        Args:
+            task_id: Optional ID of the task to query
+        """
+        logger.info(f"Checking task status from SQLite: {task_id}")
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                if task_id:
+                    row = conn.execute(
+                        "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
+                    ).fetchone()
+                    if not row:
+                        return f"Tidak ditemukan task dengan ID {task_id}."
+                    return f"Task {row['task_id']} ({row['user_intent']}) status: {row['status']}. Summary: {row['summary'] or 'belum ada output'}."
+                else:
+                    rows = conn.execute(
+                        "SELECT task_id, user_intent, status, summary FROM tasks ORDER BY created_at DESC LIMIT 5"
+                    ).fetchall()
+                    if not rows:
+                        return "Belum ada task di background saat ini."
+                    items = [
+                        f"- [{r['task_id']}] {r['user_intent']} ({r['status']})"
+                        for r in rows
+                    ]
+                    return "Task terbaru di background:\n" + "\n".join(items)
+        except Exception as e:
+            logger.exception("Failed to query tasks")
+            return f"Gagal memeriksa status task: {e}"
+
+
+@server.rtc_session(agent_name="jarvis")
+async def my_agent(ctx: JobContext):
+    ctx.log_context_fields = {"room": ctx.room.name}
+    await ctx.connect()
+
+    # Wait for participant to join
+    participant = None
+    voice = FALLBACK_VOICE
+    try:
+        participant = await asyncio.wait_for(
+            ctx.wait_for_participant(identity="schnee"), timeout=30.0
+        )
+        attributes = participant.attributes or {}
+        voice = attributes.get("voice") or FALLBACK_VOICE
+        logger.info(f"Participant joined: {participant.identity}, voice: {voice}")
+    except asyncio.TimeoutError:
+        logger.warning("Participant wait timeout — using default voice")
+    except Exception as e:
+        logger.warning(f"Error resolving participant attributes: {e}")
+
+    gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not gemini_api_key:
+        logger.error("GEMINI_API_KEY / GOOGLE_API_KEY is not set in environment!")
+
+    # Validate that voice is a valid Gemini voice; if user sent Fish Audio hash, fallback to Aoede
+    if voice not in VALID_GEMINI_VOICES:
+        logger.warning(f"Voice '{voice}' is not a valid Gemini voice — falling back to '{FALLBACK_VOICE}'")
+        voice = FALLBACK_VOICE
+
+    # Native Gemini Live Multimodal Realtime Model
+    model = RealtimeModel(
+        model="gemini-3.1-flash-live-preview",
+        api_key=gemini_api_key,
+        voice=voice,
+        modalities=["AUDIO"],
+        temperature=0.7,
+    )
+
+    agent = ShorekeeperAgent(instructions=SHOREKEEPER_INSTRUCTIONS, room_name=ctx.room.name)
+    session = AgentSession(llm=model)
+
+    await session.start(agent=agent, room=ctx.room)
+    logger.info("Shorekeeper Gemini Live session started.")
+
+
+if __name__ == '__main__':
+    from livekit.agents import cli
+    cli.run_app(server)

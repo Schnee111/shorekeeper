@@ -5,6 +5,13 @@ export default defineConfig({
   base: "/",
   plugins: [svelte()],
   server: {
-    port: 3000,
+    port: 5173,
+    proxy: {
+      "/jarvis-livekit": {
+        target: "http://127.0.0.1:8082",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/jarvis-livekit/, ""),
+      },
+    },
   },
 });
