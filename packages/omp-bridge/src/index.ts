@@ -23,6 +23,7 @@ import { TaskSpecSchema, type TaskSpec } from "handoff-contract";
 
 export * from "./manager.js";
 export * from "./safety.js";
+export * from "./errors.js";
 export const BRIDGE_VERSION = "0.1.0";
 
 /** Default timeout worker: 300 detik (TASK-1.3). */

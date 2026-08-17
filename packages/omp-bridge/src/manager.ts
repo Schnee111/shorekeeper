@@ -311,6 +311,7 @@ export class WorkerManager {
 
     // TASK-3.2 (injection): scan path terlarang SEBELUM simpan spec/claim —
     // ditolak REPO_NOT_ALLOWED + alert, TANPA spawn (spawn counter 0).
+    // Task di-`cancelled` (terminal): spec berbahaya tidak boleh masuk antrian.
     const violation = scanSpecForbidden(specTexts(o.spec));
     if (violation) {
       this.opts.onEvent({
@@ -320,9 +321,9 @@ export class WorkerManager {
         message: safetyAlertLine(taskId, violation),
       });
       try {
-        this.opts.store.transition(taskId, "blocked", { error: `${violation.code}: ${violation.reason} [${violation.matched.join(";")}]` });
+        this.opts.store.transition(taskId, "cancelled", { error: `${violation.code}: ${violation.reason} [${violation.matched.join(";")}]` });
       } catch {
-        // sudah terminal/blocked — abaikan
+        // sudah terminal — abaikan
       }
       return { taskId, status: "rejected", reason: violation.code, owners: [] };
     }

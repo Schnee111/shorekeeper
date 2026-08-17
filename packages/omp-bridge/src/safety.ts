@@ -22,7 +22,7 @@ const FORBIDDEN_PATH_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /(^|[\s"'`(=:])(\/(etc|root|boot|proc|sys|dev))\//i, label: "abs-system" },
   { re: /(^|[\s"'`(=:])(\/(etc|root|boot|proc|sys|dev))(?=[\s"'`)\]:,]|$)/i, label: "abs-system-bare" },
   { re: /[A-Za-z]:\\(Windows|Users|ProgramData)/i, label: "windows-system" },
-  { re: /(^|[\s"'`(=:\/])\.\.(\/|\\)/, label: "path-traversal" },
+  { re: /(^|[\s"'`(=:/])\.\.(\/|\\)/, label: "path-traversal" },
 ];
 
 /** Pola instruksi jailbreak/injection (metadata alert — penolakan tetap via path check). */
