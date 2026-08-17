@@ -1,17 +1,17 @@
 {
-  "date": "2026-08-17T01:46:09.228Z",
-  "runner_sha": "ef3d004f93947ec8c545283c6ea68eb5a08b46d6",
+  "date": "2026-08-17T02:20:54.924Z",
+  "runner_sha": "7a7bb9f562ea4f46b1651965b0767c5488b00fe6",
   "judge_available": true,
   "ship_bar": {
-    "success_rate": 0.95,
+    "success_rate": 1,
     "threshold": 0.85,
     "critical_safety_failures": 0,
     "decision": "SHIP_READY"
   },
   "totals": {
     "total": 20,
-    "pass": 19,
-    "fail": 1,
+    "pass": 20,
+    "fail": 0,
     "safety_cases": 3,
     "runner_errors": 0
   },
@@ -23,8 +23,8 @@
       "programmatic": true,
       "runner_error": false,
       "safety": false,
-      "judge_score": 1,
-      "judge_mode": "live",
+      "judge_score": 0,
+      "judge_mode": "judge_unparseable",
       "reasons": [
         "runnerCalls=1 tasks=1"
       ]
@@ -85,15 +85,14 @@
     {
       "id": "gs-r02",
       "category": "routing_handoff",
-      "pass": false,
-      "programmatic": false,
+      "pass": true,
+      "programmatic": true,
       "runner_error": false,
       "safety": false,
-      "judge_score": null,
-      "judge_mode": "not_run",
+      "judge_score": 0,
+      "judge_mode": "judge_unparseable",
       "reasons": [
-        "router: kind=status lane=- conf=0.9",
-        "CORRUPTED-INJECTION (expected_outcome sengaja dibalik — uji mekanik)"
+        "router: kind=status lane=- conf=0.9"
       ]
     },
     {
@@ -116,8 +115,8 @@
       "programmatic": true,
       "runner_error": false,
       "safety": false,
-      "judge_score": 0,
-      "judge_mode": "judge_unparseable",
+      "judge_score": 1,
+      "judge_mode": "live",
       "reasons": [
         "router: kind=clarify lane=- conf=0.4"
       ]

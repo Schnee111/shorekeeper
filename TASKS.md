@@ -115,7 +115,7 @@ ADR-001 dan minta konfirmasi, (d) E2E gagal di luar kemampuan debug dalam 2 perc
 ---
 
 ## TASK-1.1: Setup monorepo shorekeeper + tooling dasar + quality gate Fase 1
-Status: [ ] pending · Prioritas: P0 · Depends on: —
+Status: [x] done · Prioritas: P0 · Depends on: —
 
 ### Objective
 Monorepo `~/projects/shorekeeper` berdiri dengan tooling build/lint/test hijau, file governance
@@ -172,7 +172,7 @@ Monorepo `~/projects/shorekeeper` berdiri dengan tooling build/lint/test hijau, 
 ---
 
 ## TASK-1.2: Draft prompt & persona agent (SOUL.md) + handoff contract
-Status: [ ] pending · Prioritas: P0 · Depends on: TASK-1.1
+Status: [x] done · Prioritas: P0 · Depends on: TASK-1.1
 
 ### Objective
 Persona/prompt untuk 3 role (front-router, orchestrator, worker) + JSON contract handoff selesai
