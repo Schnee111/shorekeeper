@@ -286,14 +286,17 @@ async def my_agent(ctx: JobContext):
     )
 
     # Attach TTS for programmatic push notifications (session.say) without affecting realtime audio
+    tts_model = None
     try:
-        tts_model = google.TTS(voice_name=voice, api_key=gemini_api_key)
+        tts_model = google.TTS(voice_name=voice)
     except Exception as te:
-        logger.warning(f"google.TTS init fallback: {te}")
-        tts_model = google.TTS(api_key=gemini_api_key)
+        logger.warning(f"google.TTS init failed: {te}")
 
     agent = ShorekeeperAgent(instructions=SHOREKEEPER_INSTRUCTIONS, room_name=ctx.room.name)
-    session = AgentSession(llm=model, tts=tts_model)
+    session_kwargs = {"llm": model}
+    if tts_model:
+        session_kwargs["tts"] = tts_model
+    session = AgentSession(**session_kwargs)
 
     await session.start(agent=agent, room=ctx.room)
     logger.info("Shorekeeper Gemini Live session started.")
