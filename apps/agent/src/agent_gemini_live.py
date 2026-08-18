@@ -22,7 +22,6 @@ from livekit.agents import (
     JobContext,
     function_tool,
 )
-from livekit.plugins import google
 from livekit.plugins.google.realtime import RealtimeModel
 
 logger = logging.getLogger("shorekeeper-agent")
@@ -628,12 +627,16 @@ async def my_agent(ctx: JobContext):
         model_kwargs["session_resumption"] = SessionResumptionConfig(handle=resume_handle)
     model = RealtimeModel(**model_kwargs)  # type: ignore[arg-type]
 
-    # Attach TTS for programmatic push notifications (session.say) without affecting realtime audio
+    # Attach TTS for programmatic push notifications (session.say) without affecting realtime audio.
+    # NOTE: gunakan beta.GeminiTTS (GOOGLE_API_KEY), BUKAN google.TTS yang butuh
+    # Vertex AI ADC credentials (DefaultCredentialsError di VPS tanpa gcloud).
     tts_model = None
     try:
-        tts_model = google.TTS(voice_name=voice)
+        from livekit.plugins.google.beta import GeminiTTS
+
+        tts_model = GeminiTTS(voice_name=voice, api_key=gemini_api_key)
     except Exception as te:
-        logger.warning(f"google.TTS init failed: {te}")
+        logger.warning(f"GeminiTTS init failed: {te}")
 
     agent = ShorekeeperAgent(
         instructions=SHOREKEEPER_INSTRUCTIONS + ("\n\n" + context_block if context_block else ""),
@@ -665,14 +668,14 @@ async def my_agent(ctx: JobContext):
                 logger.debug(f"Resumption handle poll error: {e}")
 
     resumption_ref = asyncio.create_task(resumption_handle_loop())
-    
+
     async def cancel_resumption():
         resumption_ref.cancel()
         try:
             await resumption_ref
         except asyncio.CancelledError:
             pass
-    
+
     ctx.add_shutdown_callback(cancel_resumption)
 
     # Background Poller — Sprint C: claim atomik + interrupt + coalesce
@@ -685,14 +688,14 @@ async def my_agent(ctx: JobContext):
                 logger.debug(f"Outbox poll error: {e}")
 
     task_ref = asyncio.create_task(outbox_notification_loop())
-    
+
     async def cancel_outbox():
         task_ref.cancel()
         try:
             await task_ref
         except asyncio.CancelledError:
             pass
-    
+
     ctx.add_shutdown_callback(cancel_outbox)
 
 
