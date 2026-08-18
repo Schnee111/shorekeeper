@@ -10,6 +10,11 @@ import zoneinfo
 
 import aiohttp
 from dotenv import load_dotenv
+from google.genai.types import (
+    ContextWindowCompressionConfig,
+    SessionResumptionConfig,
+    SlidingWindow,
+)
 from livekit.agents import (
     Agent,
     AgentServer,
@@ -64,6 +69,16 @@ def init_db():
               created_at   INTEGER NOT NULL,
               delivered    INTEGER NOT NULL DEFAULT 0,
               delivered_at INTEGER
+            )
+            """
+        )
+        # Sprint B.2: Session resumption handle per room
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS session_resumption (
+              room TEXT PRIMARY KEY,
+              handle TEXT NOT NULL DEFAULT '',
+              updated_at INTEGER NOT NULL
             )
             """
         )
@@ -332,15 +347,6 @@ class ShorekeeperAgent(Agent):
 
 
 async def build_session_context(room_name: str) -> str:
-    """Sprint A.2: Bangun blok konteks [KONTEKS SAAT INI] sebelum session.start().
-
-    Sumber:
-    1. MemPalace (HTTP MCP): preferensi user + proyek aktif (top-k kecil, ringkas).
-    2. SQLite tasks: 5 task terakhir (task_id, intent, status).
-
-    Graceful fail: jika MemPalace/DB gagal → log warning, lanjut tanpa konteks.
-    Timeout HTTP MemPalace: 1.5 detik. Total ≤ 1000 token.
-    """
     parts: list[str] = []
 
     # 1. MemPalace preferences + active projects
@@ -397,6 +403,37 @@ async def build_session_context(room_name: str) -> str:
     return context
 
 
+def get_session_handle(room_name: str) -> str | None:
+    """Sprint B.2: Ambil session handle dari SQLite untuk room tertentu."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            row = conn.execute(
+                "SELECT handle FROM session_resumption WHERE room = ?", (room_name,)
+            ).fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        logger.warning(f"Failed to get session handle for {room_name}: {e}")
+        return None
+
+
+def save_session_handle(room_name: str, handle: str) -> bool:
+    """Sprint B.2: Simpan/update session handle ke SQLite."""
+    try:
+        now = int(time.time() * 1000)
+        with sqlite3.connect(DB_PATH) as conn:
+            # Upsert: insert or update handle + timestamp
+            conn.execute(
+                """INSERT INTO session_resumption (room, handle, updated_at)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(room) DO UPDATE SET handle=?, updated_at=?""",
+                (room_name, handle, now, handle, now),
+            )
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to save session handle for {room_name}: {e}")
+        return False
+
+
 @server.rtc_session(agent_name="jarvis")
 async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
@@ -429,14 +466,27 @@ async def my_agent(ctx: JobContext):
         logger.warning(f"Voice '{voice}' is not a valid Gemini voice — falling back to '{FALLBACK_VOICE}'")
         voice = FALLBACK_VOICE
 
+    # Sprint B.2: resume from persisted handle (cross-restart resumption)
+    resume_handle = get_session_handle(ctx.room.name)
+    if resume_handle:
+        logger.info(f"Resuming session from persisted handle for {ctx.room.name}")
+
     # Native Gemini Live Multimodal Realtime Model
-    model = RealtimeModel(
-        model="gemini-3.1-flash-live-preview",
-        api_key=gemini_api_key,
-        voice=voice,
-        modalities=["AUDIO"],
-        temperature=0.7,
-    )
+    # (Sprint B.1: context compression · B.2: session resumption)
+    model_kwargs: dict[str, object] = {
+        "model": "gemini-3.1-flash-live-preview",
+        "api_key": gemini_api_key,
+        "voice": voice,
+        "modalities": ["AUDIO"],
+        "temperature": 0.7,
+        "context_window_compression": ContextWindowCompressionConfig(
+            trigger_tokens=60_000,
+            sliding_window=SlidingWindow(target_tokens=30_000),
+        ),
+    }
+    if resume_handle:
+        model_kwargs["session_resumption"] = SessionResumptionConfig(handle=resume_handle)
+    model = RealtimeModel(**model_kwargs)  # type: ignore[arg-type]
 
     # Attach TTS for programmatic push notifications (session.say) without affecting realtime audio
     tts_model = None
@@ -449,13 +499,33 @@ async def my_agent(ctx: JobContext):
         instructions=SHOREKEEPER_INSTRUCTIONS + ("\n\n" + context_block if context_block else ""),
         room_name=ctx.room.name,
     )
-    session_kwargs = {"llm": model}
+
+    session_kwargs: dict[str, object] = {"llm": model}
     if tts_model:
         session_kwargs["tts"] = tts_model
     session = AgentSession(**session_kwargs)
 
     await session.start(agent=agent, room=ctx.room)
     logger.info("Shorekeeper Gemini Live session started.")
+
+    # Sprint B.2: persist resumption handle updates (plugin tidak mengekspos
+    # event resumption — poll property session_resumption_handle, simpan ke
+    # SQLite saat berubah; dipakai sebagai handle resume di session berikutnya).
+    async def resumption_handle_loop():
+        last_handle = None
+        while True:
+            await asyncio.sleep(15.0)
+            try:
+                handle = getattr(model, "session_resumption_handle", None)
+                if handle and handle != last_handle:
+                    last_handle = handle
+                    save_session_handle(ctx.room.name, handle)
+                    logger.info(f"Persisted session resumption handle for {ctx.room.name}")
+            except Exception as e:
+                logger.debug(f"Resumption handle poll error: {e}")
+
+    resumption_ref = asyncio.create_task(resumption_handle_loop())
+    ctx.add_shutdown_callback(lambda: resumption_ref.cancel())
 
     # Background Poller for Proactive Task Completion Notification (TASK-3.2 / Voice Push)
     async def outbox_notification_loop():

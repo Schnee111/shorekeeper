@@ -1,0 +1,37 @@
+--- realtime_api.py	2026-08-18 17:13:16.526595482 +0700
++++ /tmp/realtime_api.patched.py	2026-08-18 17:11:24.837699784 +0700
+@@ -905,19 +905,21 @@
+                                 f"update_instructions() to set system-level context instead."
+                             )
+ 
+-                        turns_dict, _ = self._chat_ctx.copy(
+-                            exclude_function_call=True,
+-                            exclude_handoff=True,
+-                            exclude_instructions=True,
+-                            exclude_empty_message=True,
+-                            exclude_config_update=True,
+-                        ).to_provider_format(format="google", inject_dummy_user_message=False)
+-                        turns = [types.Content.model_validate(turn) for turn in turns_dict]
+-                        if turns:
+-                            await session.send_client_content(
+-                                turns=turns,  # type: ignore
+-                                turn_complete=False,
+-                            )
++                        # Skip sending initial chat context on resumption — context restored server-side
++                        if not self._session_resumption_handle:
++                            turns_dict, _ = self._chat_ctx.copy(
++                                exclude_function_call=True,
++                                exclude_handoff=True,
++                                exclude_instructions=True,
++                                exclude_empty_message=True,
++                                exclude_config_update=True,
++                            ).to_provider_format(format="google", inject_dummy_user_message=False)
++                            turns = [types.Content.model_validate(turn) for turn in turns_dict]
++                            if turns:
++                                await session.send_client_content(
++                                    turns=turns,  # type: ignore
++                                    turn_complete=False,
++                                )
+ 
+                     # queue up existing chat context
+                     send_task = asyncio.create_task(
