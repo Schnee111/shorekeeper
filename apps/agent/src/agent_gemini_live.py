@@ -528,6 +528,7 @@ async def my_agent(ctx: JobContext):
     ctx.add_shutdown_callback(lambda: resumption_ref.cancel())
 
     # Background Poller for Proactive Task Completion Notification (TASK-3.2 / Voice Push)
+    # Sprint C: Atomic outbox claim pattern (claim-first, rollback on failure/interruption)
     async def outbox_notification_loop():
         while True:
             await asyncio.sleep(2.0)
@@ -541,29 +542,76 @@ async def my_agent(ctx: JobContext):
                         JOIN tasks t ON n.task_id = t.task_id
                         WHERE n.delivered = 0 AND t.session_room = ?
                         ORDER BY n.created_at ASC
+                        LIMIT 5
                         """,
                         (ctx.room.name,),
                     ).fetchall()
+
                     for r in rows:
                         tid = r["task_id"]
                         summary = r["summary"] or f"Task {tid} telah selesai."
                         logger.info(f"Proactively notifying completed task: {tid}")
-                        # Mark delivered
-                        conn.execute(
-                            "UPDATE notify_outbox SET delivered = 1, delivered_at = ? WHERE task_id = ?",
-                            (int(time.time() * 1000), tid),
-                        )
-                        conn.commit()
-                        # Inject proactive message into voice session
+
+                        # Atomic claim: mark delivered ONLY when joining the select result
+                        # If session.say fails/interrupted → rollback delivered=0
                         proactive_text = f"Schnee, update untuk task {r['user_intent']}: {summary}"
+                        rolled_back = False
+
                         try:
+                            # Mark delivered BEFORE sending (atomic claim)
+                            conn.execute(
+                                "UPDATE notify_outbox SET delivered = 1, delivered_at = ? WHERE task_id = ?",
+                                (int(time.time() * 1000), tid),
+                            )
+
+                            # Inject proactive message into voice session
                             await session.say(text=proactive_text)
+
+                            # Commit only after successful delivery
+                            conn.commit()
+
                         except Exception as ge:
+                            # Rollback on send failure: deliver=0 retry next poll
                             logger.warning(f"Failed to trigger proactive voice speech via say: {ge}")
                             try:
                                 await session.generate_reply(user_input=proactive_text)
                             except Exception as gre:
                                 logger.warning(f"Failed to trigger generate_reply: {gre}")
+                                # Rollback delivered flag for retry
+                                try:
+                                    conn.execute(
+                                        "UPDATE notify_outbox SET delivered = 0, delivered_at = NULL WHERE task_id = ?",
+                                        (tid,)
+                                    )
+                                    conn.commit()
+                                    rolled_back = True
+                                except Exception as e:
+                                    logger.error(f"Failed to rollback delivered flag: {e}")
+                            continue
+
+                    # Check for interrupted notifications and rollback
+                    try:
+                        interrupted_tasks = conn.execute(
+                            """SELECT task_id FROM notify_outbox 
+                               WHERE delivered = 1 AND delivered_at > ? 
+                               AND EXISTS (
+                                   SELECT 1 FROM speech_history 
+                                   WHERE task_id = notify_outbox.task_id 
+                                   AND status = 'interrupted'
+                               )""",
+                            (int(time.time() * 1000) - 5000,)  # last 5 seconds
+                        ).fetchall()
+                        if interrupted_tasks:
+                            for (tid,) in interrupted_tasks:
+                                conn.execute(
+                                    "UPDATE notify_outbox SET delivered = 0, delivered_at = NULL WHERE task_id = ?",
+                                    (tid,)
+                                )
+                            conn.commit()
+                            logger.info(f"Rolled back {len(interrupted_tasks)} interrupted notifications")
+                    except Exception as e:
+                        logger.debug(f"Interrupt check error: {e}")
+
             except Exception as e:
                 logger.debug(f"Outbox poll error: {e}")
 
