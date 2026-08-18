@@ -660,7 +660,15 @@ async def my_agent(ctx: JobContext):
                 logger.debug(f"Resumption handle poll error: {e}")
 
     resumption_ref = asyncio.create_task(resumption_handle_loop())
-    ctx.add_shutdown_callback(lambda: resumption_ref.cancel())
+    
+    async def cancel_resumption():
+        resumption_ref.cancel()
+        try:
+            await resumption_ref
+        except asyncio.CancelledError:
+            pass
+    
+    ctx.add_shutdown_callback(cancel_resumption)
 
     # Background Poller — Sprint C: claim atomik + interrupt + coalesce
     async def outbox_notification_loop():
@@ -672,7 +680,15 @@ async def my_agent(ctx: JobContext):
                 logger.debug(f"Outbox poll error: {e}")
 
     task_ref = asyncio.create_task(outbox_notification_loop())
-    ctx.add_shutdown_callback(lambda: task_ref.cancel())
+    
+    async def cancel_outbox():
+        task_ref.cancel()
+        try:
+            await task_ref
+        except asyncio.CancelledError:
+            pass
+    
+    ctx.add_shutdown_callback(cancel_outbox)
 
 
 if __name__ == '__main__':
