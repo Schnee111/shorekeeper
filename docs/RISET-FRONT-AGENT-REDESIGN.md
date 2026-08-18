@@ -313,3 +313,96 @@ Hermes backend merangkum percakapan tiap N=10 turn ATAU saat usage mendekati tri
 - oh-my-pi: github.com/can1357/oh-my-pi (README, docs/rpc.md, docs/non-compaction-retry-policy.md, print-mode.ts)
 - Riset internal: /mnt/d/riset-context-window-gemini-live.md, /mnt/d/riset-edge-cases-voice-agent.md, /mnt/d/riset-alternatif-front-live-model-2026-08.md
 - Handoff design: docs/HANDOFF_DESIGN.md (repo ini)
+
+---
+
+## 9. Appendix: Riset Lanjutan (Gap Closure G4-G12) — 2026-08-18
+
+### 9.1 Model Fallback (G4)
+
+**FAKTA-DOK:** LiveKit `FallbackAdapter` TIDAK support realtime→realtime failover — hanya cascade (STT/LLM/TTS terpisah). Cross-realtime failover butuh implementasi custom (issue agents-js #868).
+
+**Chain rekomendasi (GRATIS):**
+```
+L0: Gemini 3.1 Flash Live (primary, S2S native)
+  ↓ error: 429/quota/connection timeout (2x berturut, bukan single flake)
+L1: Gemini 2.5 Flash Native Audio (S2S, fitur lebih lengkap: affective+proactivity+async tools)
+  ↓ error lanjutan
+L2: Cascade degradasi: Deepgram Nova-2 (STT) + Gemini 2.5 Flash Lite (LLM) + Google TTS free (TTS)
+```
+
+Implikasi UX per lompatan:
+- L0→L1: hampir tanpa beda (S2S tetap), tapi correlated failure risk (sama-sama Google)
+- L1→L2: +800-1200ms/turn, barge-in hilang, kualitas audio turun (3 hop). Umumkan degradasi ke user secara transparan ("Sebentar, aku ganti jalur...").
+
+### 9.2 Multi-Device (G5)
+
+**FAKTA-DOK:** LiveKit tidak punya abstraksi user-level — murni room-centric. 2 device = 2 room = 2 agent process. Tidak ada "connection migration" native.
+
+**Pola benar: "Handoff via Memory"** — state disimpan eksternal (task-store SQLite kita, keyed by user), device baru join room baru → agent load state dari store via metadata `user_id` (explicit dispatch via token metadata, bukan auto dispatch).
+
+**Implikasi untuk kode kita:** outbox saat ini keyed `session_room` → **harus diubah ke per-user** (atau dual-key) agar notifikasi task ter-deliver walau user pindah device/room. Ini perubahan schema kecil tapi penting.
+
+### 9.3 Code-Switching ID+EN (G6)
+
+**FAKTA-DOK:** Native audio models bisa switch bahasa natural dalam percakapan (auto-detect, tidak ada parameter paksa bahasa).
+
+**KOMUNITAS (known issue):** language drift — model kadang balas full English walau user bicara Indonesia (bias training). Mitigasi prompt-level wajib:
+```
+Always reply in the same language the user is currently speaking.
+If the user mixes Indonesian and English, reply in Indonesian with
+English technical terms kept as-is. Never switch to full English
+unless the user does.
+```
+
+### 9.4 Compression Tuning (G7) — ANGKA PASTI
+
+**Hitungan (FAKTA-DOK, 25 tok/detik per arah):**
+- Bidirectional: ~50 tok/detik → 128k penuh dalam **~42 menit** (batas docs 15 mnt sudah termasuk margin safety + overhead)
+- Retain 8.000 token ≈ **~2,7 menit audio** percakapan terakhir
+
+**Eviction aman (FAKTA-DOK):** system instructions + prefix turns **tidak pernah ter-evict** (immutable prefix). Yang hilang: turn percakapan awal + **riwayat eksekusi function call** (model lupa pernah memanggil tool apa, tapi tetap tahu cara pakainya).
+
+**Rekomendasi untuk voice kita:**
+- Sesi <15 mnt: tanpa compression pun aman
+- Umum: `trigger=25.000, retain=8.000` (default docs, konservatif)
+- Sesi panjang 30+ mnt: `trigger=50-60k, retain=25-30k`
+- Rasio trigger:retain = 2:1; compression op sendiri menambah latensi ~1-2 detik
+
+### 9.5 session.say() Interruption (G10) — TERJAWAB
+
+**FAKTA-DOK:** default `allow_interruptions=True` → user bicara di tengah `say()` → VAD deteksi → **TTS langsung dipotong**, buffer dibuang, agent kembali listening. Tidak ada antrean otomatis; resumption harus manual (`SpeechHandle.interrupted` → cek → tawarkan ulang via outbox "belum dikonfirmasi didengar").
+
+Arbitrase audio: `say()` (TTS plugin) dan realtime model berbagi pipeline output LiveKit yang sama — tidak bentrok sinyal; tapi notifikasi yang terpotong user HARUS ditandai belum-delivered (selaras fix E6).
+
+### 9.6 Graceful Degradation (G8, G9, G11, G12)
+
+**Timeout per tool (sync-blocking — user menunggu dalam diam):**
+
+| Tool | Timeout | Batas dead air nyaman |
+|---|---|---|
+| memory_search | **1.5s** | >2s mulai terasa |
+| check_task_status (SQLite) | **2.5s** | >3s |
+| web_search | **4s** | >4s |
+| consult (Hermes) | **6s** | >8s sangat mengganggu |
+
+**Narasi error natural (pola produksi):** akui tanpa alarmis + tawarkan alternatif. Contoh: "Pencarian webku sedang tidak tersedia. Dari yang kuingat..." / "Aku kesulitan mengingat itu sekarang — bisa kamu ulangi konteksnya?"
+
+**Agent crash mid-session (FAKTA-DOK):** job = proses terpisah (agent lain aman), tapi **state sesi hilang** tanpa persistence eksternal. Tidak ada auto-respawn stateful built-in. Karena task state kita sudah di SQLite (di luar proses), recovery = room baru + load state — sudah selaras arsitektur kita.
+
+**Health check startup — pola hybrid:**
+- Kritis (Gemini API key, LiveKit): **fail-fast** (jangan terima job)
+- Penting tapi non-fatal (SearXNG, MemPalace): **warn + degrade** — tool tetap terdaftar tapi return narasi error natural (jangan skip registrasi: model akan bingung tool hilang)
+
+---
+
+## 10. Edge Case Checklist — Tambahan (E26-E33)
+
+- [ ] **E26** Gemini Live 429/quota habis → failover L1 (2.5 native) setelah 2 error berturut; umumkan degradasi
+- [ ] **E27** Cascade mode aktif → barge-in hilang → set ekspektasi user ("mode hemat, bicara setelah aku selesai")
+- [ ] **E28** User pindah device → room baru, load state per-user (bukan per-room); outbox keyed user_id
+- [ ] **E29** Model balas full English (language drift) → prompt constraint + deteksi post-hoc
+- [ ] **E30** Compression memicu saat function-call history penting masih relevan → rolling summary wajib mencatat "task X sudah didelegate, id=..." agar model tidak bingung
+- [ ] **E31** `say()` terpotong user (interrupted) → tandai outbox belum-delivered, tawarkan ulang saat idle
+- [ ] **E32** Tool timeout (memory >1.5s, web >4s) → narasi natural, JANGAN diam
+- [ ] **E33** SearXNG/MemPalace down saat startup → warn + degrade graceful (tool tetap ada, return narasi error), Gemini/LiveKit down → fail-fast
