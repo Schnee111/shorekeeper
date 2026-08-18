@@ -1,0 +1,10 @@
+[project]
+name = "shorekeeper-token-server"
+version = "0.1.0"
+description = "Shorekeeper LiveKit token + Gemini voice registry server (port 8083)"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.9",
+    "livekit-api>=1.0",
+    "python-dotenv>=1.0",
+]

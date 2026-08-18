@@ -476,6 +476,10 @@ async def deliver_notifications(session, room_name: str, db_path: str | None = N
     atomik), lalu session.say() SATU ucapan gabungan. Jika say gagal ATAU ucapan
     di-interupsi → rollback delivered=0 (notifikasi TIDAK hilang).
     Return jumlah task yang tersampaikan.
+
+    NOTE: room_name TIDAK dipakai sebagai filter karena client membuat room baru
+    setiap reconnect (jarvis-{random8}). Semua notifikasi undelivered dikirim ke
+    session aktif — pola "drainNotify on reconnect" sesuai desain task-store.
     """
     db = db_path or DB_PATH
     with sqlite3.connect(db) as conn:
@@ -485,11 +489,11 @@ async def deliver_notifications(session, room_name: str, db_path: str | None = N
             SELECT n.task_id, n.status, t.user_intent, t.summary
             FROM notify_outbox n
             JOIN tasks t ON n.task_id = t.task_id
-            WHERE n.delivered = 0 AND t.session_room = ?
+            WHERE n.delivered = 0
             ORDER BY n.created_at ASC
             LIMIT ?
             """,
-            (room_name, COALESCE_MAX),
+            (COALESCE_MAX,),
         ).fetchall()
         if not rows:
             return 0
@@ -561,7 +565,7 @@ async def startup_health_check() -> dict[str, bool]:
     return health
 
 
-@server.rtc_session(agent_name="jarvis")
+@server.rtc_session(agent_name="shorekeeper")
 async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
     await ctx.connect()

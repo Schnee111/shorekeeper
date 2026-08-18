@@ -1,0 +1,26 @@
+[Unit]
+Description=Shorekeeper Task Daemon (poll SQLite → execute via Hermes or mock)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/projects/shorekeeper
+Environment="PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="OMP_BRIDGE_MOCK=0"        # Production mode: Hermes gateway
+Environment="HERMES_WS_URL=ws://127.0.0.1:9119/api/ws"
+Environment="SHOREKEEPER_DB=/home/ubuntu/projects/shorekeeper/data/tasks.db"
+Environment="SK_MAX_PARALLEL=3"
+Environment="SK_TASK_TIMEOUT=900000"   # 15 menit per task
+ExecStart=/usr/bin/node /home/ubuntu/projects/shorekeeper/packages/omp-bridge/dist/daemon.js
+Restart=always
+RestartSec=5
+StandardOutput=journal+console
+StandardError=journal+console
+
+# Memory safety (VPS 3.6GB RAM) — hard cap
+MemoryMax=800M
+TasksMax=20
+
+[Install]
+WantedBy=multi-user.target

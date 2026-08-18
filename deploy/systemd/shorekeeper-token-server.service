@@ -1,0 +1,18 @@
+[Unit]
+Description=Shorekeeper LiveKit Token Server (port 8083, agent=shorekeeper)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/projects/shorekeeper/apps/token-server
+EnvironmentFile=/home/ubuntu/projects/shorekeeper/apps/agent/.env.local
+Environment="SHOREKEEPER_TOKEN_PORT=8083"
+Environment="SHOREKEEPER_AGENT_NAME=shorekeeper"
+ExecStart=/home/ubuntu/.local/bin/uv run --project /home/ubuntu/projects/shorekeeper/apps/token-server python token_server.py
+Restart=always
+RestartSec=5
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

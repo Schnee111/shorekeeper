@@ -8,14 +8,14 @@
 import type { VoiceOption } from './types';
 
 /** LiveKit Cloud SFU (WebSocket endpoint of the project). */
-export const LIVEKIT_URL = 'wss://shore-eoiag4jd.livekit.cloud';
+export const LIVEKIT_URL = 'wss://jarvis-s8lzasoo.livekit.cloud';
 
 /** Local participant identity — transcripts attributed to us arrive here. */
 export const IDENTITY = 'schnee';
 
-/** nginx-proxied token/voice endpoints served by token_server.py. */
-export const TOKEN_ENDPOINT = '/jarvis-livekit/token';
-export const VOICES_ENDPOINT = '/jarvis-livekit/voices';
+/** Shorekeeper-specific token/voice endpoints (port 8083, terpisah dari jarvis lama). */
+export const TOKEN_ENDPOINT = '/shorekeeper/api/token';
+export const VOICES_ENDPOINT = '/shorekeeper/api/voices';
 
 /** localStorage key for the chosen Fish Audio voice. */
 export const VOICE_STORAGE_KEY = 'shorekeeper-voice';

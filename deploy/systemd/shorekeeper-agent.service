@@ -1,19 +1,17 @@
-# shorekeeper-agent.service — LiveKit agent (apps/agent, Python via uv).
 [Unit]
-Description=Shorekeeper LiveKit voice agent (G3)
-After=network-online.target shorekeeper-orchestrator.service
-Wants=network-online.target
+Description=Shorekeeper LiveKit Agent (Gemini Live voice front, agent=shorekeeper)
+After=network.target shorekeeper-token-server.service
 
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/opt/shorekeeper
-EnvironmentFile=/opt/shorekeeper/.env
-ExecStart=/usr/local/bin/uv run --project apps/agent python -m agent
-Restart=on-failure
+WorkingDirectory=/home/ubuntu/projects/shorekeeper/apps/agent
+EnvironmentFile=/home/ubuntu/projects/shorekeeper/apps/agent/.env.local
+ExecStart=/home/ubuntu/.local/bin/uv run --project /home/ubuntu/projects/shorekeeper/apps/agent python src/agent_gemini_live.py start
+Restart=always
 RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
+MemoryMax=800M
+TasksMax=50
 
 [Install]
 WantedBy=multi-user.target
