@@ -333,11 +333,11 @@ class ShorekeeperAgent(Agent):
 
 async def build_session_context(room_name: str) -> str:
     """Sprint A.2: Bangun blok konteks [KONTEKS SAAT INI] sebelum session.start().
-    
+
     Sumber:
     1. MemPalace (HTTP MCP): preferensi user + proyek aktif (top-k kecil, ringkas).
     2. SQLite tasks: 5 task terakhir (task_id, intent, status).
-    
+
     Graceful fail: jika MemPalace/DB gagal → log warning, lanjut tanpa konteks.
     Timeout HTTP MemPalace: 1.5 detik. Total ≤ 1000 token.
     """
