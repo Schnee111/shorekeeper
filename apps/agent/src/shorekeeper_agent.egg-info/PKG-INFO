@@ -8,6 +8,7 @@ Requires-Dist: httpx>=0.28.1
 Requires-Dist: livekit-agents>=1.6.9
 Requires-Dist: livekit-plugins-ai-coustics~=0.2
 Requires-Dist: livekit-plugins-deepgram>=1.6.9
+Requires-Dist: livekit-plugins-google>=1.6.10
 Requires-Dist: num2words>=0.5.14
 Requires-Dist: python-dotenv
 Requires-Dist: websockets>=16.1.1
