@@ -76,21 +76,23 @@ async def get_token(request: web.Request) -> web.Response:
     if voice_id not in VOICE_LABELS:
         voice_id = DEFAULT_VOICE
     model = request.query.get("model", "")
+    attributes = {"voice": voice_id}
+    if model:
+        attributes["model"] = model
 
     # Agent auto-dispatch: participant masuk room → LiveKit dispatch agent.
-    agent_grant = api.ParticipantAgentDispatch(agent_name=AGENT_NAME)
+    # Pola livekit-api 1.2.x: RoomConfiguration + RoomAgentDispatch
+    # (bukan VideoGrants.agent_dispatches — field itu baru di versi lebih baru).
+    room_config = api.RoomConfiguration(
+        agents=[api.RoomAgentDispatch(agent_name=AGENT_NAME)]
+    )
+
     grant = api.VideoGrants(
         room_join=True,
         room=room,
         can_publish=True,
         can_subscribe=True,
-        room_admin=True,
-        agent_dispatches=[agent_grant],
     )
-
-    attributes = {"voice": voice_id}
-    if model:
-        attributes["model"] = model
 
     token = (
         api.AccessToken(
@@ -100,6 +102,7 @@ async def get_token(request: web.Request) -> web.Response:
         .with_identity(identity)
         .with_name(identity)
         .with_grants(grant)
+        .with_room_config(room_config)
         .with_attributes(attributes)
         .to_jwt()
     )

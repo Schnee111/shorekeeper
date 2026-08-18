@@ -31,7 +31,9 @@ load_dotenv(".env.local")
 load_dotenv(".env")
 
 # Database Path
-DATA_DIR = "/home/daffa/projects/shorekeeper/data"
+DATA_DIR = os.getenv("SHOREKEEPER_DATA_DIR") or os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "data")
+)
 DB_PATH = os.path.join(DATA_DIR, "tasks.db")
 
 
@@ -148,6 +150,9 @@ server = AgentServer(
     job_memory_limit_mb=600,
     load_threshold=0.95,
     multiprocessing_context="spawn",
+    # Prod default 8081 — konflik dengan jarvis-agent lama di VPS.
+    # Default 0 = port acak bebas (paling aman, tidak pernah bentrok).
+    port=int(os.getenv("SHOREKEEPER_AGENT_HTTP_PORT", "0")),
 )
 
 FALLBACK_VOICE = "Aoede"

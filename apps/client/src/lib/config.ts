@@ -17,7 +17,7 @@ export const IDENTITY = 'schnee';
 export const TOKEN_ENDPOINT = '/shorekeeper/api/token';
 export const VOICES_ENDPOINT = '/shorekeeper/api/voices';
 
-/** localStorage key for the chosen Fish Audio voice. */
+/** localStorage key for the chosen Gemini voice. */
 export const VOICE_STORAGE_KEY = 'shorekeeper-voice';
 export const MODEL_STORAGE_KEY = 'shorekeeper-model';
 
