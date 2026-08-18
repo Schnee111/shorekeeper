@@ -434,6 +434,133 @@ def save_session_handle(room_name: str, handle: str) -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# Sprint C — Push notification yang benar
+# ---------------------------------------------------------------------------
+
+_NUM_WORDS = {1: "satu", 2: "dua", 3: "tiga", 4: "empat", 5: "lima"}
+COALESCE_MAX = 5
+
+
+def coalesce_notifications(rows: list[dict]) -> str:
+    """C.3: gabungkan baris notifikasi jadi SATU ucapan natural (maks 5 item)."""
+    n = len(rows)
+    if n == 1:
+        r = rows[0]
+        summary = r.get("summary") or "sudah selesai."
+        return f"Schnee, task {r.get('user_intent') or r['task_id']}: {summary}"
+    word = _NUM_WORDS.get(n, str(n))
+    parts = []
+    for r in rows:
+        intent = (r.get("user_intent") or r["task_id"]).split(":")[0][:60]
+        parts.append(intent)
+    return f"Schnee, {word} task selesai: {'; '.join(parts)}."
+
+
+def _rollback_delivered(task_ids: list[str], db_path: str) -> None:
+    """C.1/C.2: kembalikan delivered=0 agar ditawarkan ulang di poll berikutnya."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.executemany(
+                "UPDATE notify_outbox SET delivered = 0, delivered_at = NULL WHERE task_id = ?",
+                [(tid,) for tid in task_ids],
+            )
+    except Exception as e:
+        logger.warning(f"Notification rollback failed: {e}")
+
+
+async def deliver_notifications(session, room_name: str, db_path: str | None = None) -> int:
+    """C.1+C.2+C.3: claim atomik → coalesce → say → hormati interupsi.
+
+    Pola: UPDATE ... SET delivered=1 WHERE delivered=0 RETURNING task_id (claim
+    atomik), lalu session.say() SATU ucapan gabungan. Jika say gagal ATAU ucapan
+    di-interupsi → rollback delivered=0 (notifikasi TIDAK hilang).
+    Return jumlah task yang tersampaikan.
+    """
+    db = db_path or DB_PATH
+    with sqlite3.connect(db) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT n.task_id, n.status, t.user_intent, t.summary
+            FROM notify_outbox n
+            JOIN tasks t ON n.task_id = t.task_id
+            WHERE n.delivered = 0 AND t.session_room = ?
+            ORDER BY n.created_at ASC
+            LIMIT ?
+            """,
+            (room_name, COALESCE_MAX),
+        ).fetchall()
+        if not rows:
+            return 0
+
+        # C.1: claim atomik (hanya baris yang belum delivered)
+        claimed: list[dict] = []
+        now = int(time.time() * 1000)
+        for r in rows:
+            got = conn.execute(
+                "UPDATE notify_outbox SET delivered = 1, delivered_at = ? "
+                "WHERE task_id = ? AND delivered = 0 RETURNING task_id",
+                (now, r["task_id"]),
+            ).fetchone()
+            if got:
+                claimed.append(dict(r))
+    if not claimed:
+        return 0
+
+    utterance = coalesce_notifications(claimed)
+    claimed_ids = [r["task_id"] for r in claimed]
+    try:
+        handle = await session.say(utterance)
+        # C.2: tunggu ucapan selesai/terinterupsi, lalu cek SpeechHandle.interrupted
+        wait = getattr(handle, "wait_if_not_interrupted", None)
+        if wait is not None:
+            await wait()
+        if getattr(handle, "interrupted", False):
+            logger.info("Notification interrupted — rollback for re-offer")
+            _rollback_delivered(claimed_ids, db)
+            return 0
+        return len(claimed)
+    except Exception as e:
+        # C.1: say gagal → notifikasi tetap pending, TIDAK hilang
+        logger.warning(f"Proactive notification delivery failed: {e}")
+        _rollback_delivered(claimed_ids, db)
+        return 0
+
+
+async def startup_health_check() -> dict[str, bool]:
+    health = {"searxng": False, "mempalace": False}
+
+    async def _check_searxng() -> None:
+        try:
+            async with aiohttp.ClientSession() as s, s.get(
+                "http://43.133.136.244:8888/healthz",
+                timeout=aiohttp.ClientTimeout(total=2.0),
+            ) as resp:
+                health["searxng"] = resp.status < 500
+        except Exception:
+            health["searxng"] = False
+
+    async def _check_mempalace() -> None:
+        endpoint = os.getenv("MEMPALACE_MCP_HTTP_ENDPOINT", "")
+        if not endpoint:
+            return
+        try:
+            async with aiohttp.ClientSession() as s, s.get(
+                f"{endpoint}/health",
+                timeout=aiohttp.ClientTimeout(total=2.0),
+            ) as resp:
+                health["mempalace"] = resp.status < 500
+        except Exception:
+            health["mempalace"] = False
+
+    await asyncio.gather(_check_searxng(), _check_mempalace())
+    for name, ok in health.items():
+        if not ok:
+            logger.warning(f"Startup health check: {name} DOWN — tools tetap terdaftar, narasi error saat dipanggil")
+    return health
+
+
 @server.rtc_session(agent_name="jarvis")
 async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
@@ -457,9 +584,13 @@ async def my_agent(ctx: JobContext):
     # Sprint A.2: Context injection (build_session_context)
     context_block = await build_session_context(ctx.room.name)
 
+    # Sprint C.4: dependency non-kritis — warning saja, tool tetap terdaftar
+    await startup_health_check()
+
+    # Sprint C.4: kredensial kritis → fail-fast
     gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not gemini_api_key:
-        logger.error("GEMINI_API_KEY / GOOGLE_API_KEY is not set in environment!")
+        raise RuntimeError("GEMINI_API_KEY / GOOGLE_API_KEY is not set — cannot start session")
 
     # Validate that voice is a valid Gemini voice; if user sent Fish Audio hash, fallback to Aoede
     if voice not in VALID_GEMINI_VOICES:
@@ -527,91 +658,12 @@ async def my_agent(ctx: JobContext):
     resumption_ref = asyncio.create_task(resumption_handle_loop())
     ctx.add_shutdown_callback(lambda: resumption_ref.cancel())
 
-    # Background Poller for Proactive Task Completion Notification (TASK-3.2 / Voice Push)
-    # Sprint C: Atomic outbox claim pattern (claim-first, rollback on failure/interruption)
+    # Background Poller — Sprint C: claim atomik + interrupt + coalesce
     async def outbox_notification_loop():
         while True:
             await asyncio.sleep(2.0)
             try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    conn.row_factory = sqlite3.Row
-                    rows = conn.execute(
-                        """
-                        SELECT n.task_id, n.status, t.user_intent, t.summary
-                        FROM notify_outbox n
-                        JOIN tasks t ON n.task_id = t.task_id
-                        WHERE n.delivered = 0 AND t.session_room = ?
-                        ORDER BY n.created_at ASC
-                        LIMIT 5
-                        """,
-                        (ctx.room.name,),
-                    ).fetchall()
-
-                    for r in rows:
-                        tid = r["task_id"]
-                        summary = r["summary"] or f"Task {tid} telah selesai."
-                        logger.info(f"Proactively notifying completed task: {tid}")
-
-                        # Atomic claim: mark delivered ONLY when joining the select result
-                        # If session.say fails/interrupted → rollback delivered=0
-                        proactive_text = f"Schnee, update untuk task {r['user_intent']}: {summary}"
-                        rolled_back = False
-
-                        try:
-                            # Mark delivered BEFORE sending (atomic claim)
-                            conn.execute(
-                                "UPDATE notify_outbox SET delivered = 1, delivered_at = ? WHERE task_id = ?",
-                                (int(time.time() * 1000), tid),
-                            )
-
-                            # Inject proactive message into voice session
-                            await session.say(text=proactive_text)
-
-                            # Commit only after successful delivery
-                            conn.commit()
-
-                        except Exception as ge:
-                            # Rollback on send failure: deliver=0 retry next poll
-                            logger.warning(f"Failed to trigger proactive voice speech via say: {ge}")
-                            try:
-                                await session.generate_reply(user_input=proactive_text)
-                            except Exception as gre:
-                                logger.warning(f"Failed to trigger generate_reply: {gre}")
-                                # Rollback delivered flag for retry
-                                try:
-                                    conn.execute(
-                                        "UPDATE notify_outbox SET delivered = 0, delivered_at = NULL WHERE task_id = ?",
-                                        (tid,)
-                                    )
-                                    conn.commit()
-                                    rolled_back = True
-                                except Exception as e:
-                                    logger.error(f"Failed to rollback delivered flag: {e}")
-                            continue
-
-                    # Check for interrupted notifications and rollback
-                    try:
-                        interrupted_tasks = conn.execute(
-                            """SELECT task_id FROM notify_outbox 
-                               WHERE delivered = 1 AND delivered_at > ? 
-                               AND EXISTS (
-                                   SELECT 1 FROM speech_history 
-                                   WHERE task_id = notify_outbox.task_id 
-                                   AND status = 'interrupted'
-                               )""",
-                            (int(time.time() * 1000) - 5000,)  # last 5 seconds
-                        ).fetchall()
-                        if interrupted_tasks:
-                            for (tid,) in interrupted_tasks:
-                                conn.execute(
-                                    "UPDATE notify_outbox SET delivered = 0, delivered_at = NULL WHERE task_id = ?",
-                                    (tid,)
-                                )
-                            conn.commit()
-                            logger.info(f"Rolled back {len(interrupted_tasks)} interrupted notifications")
-                    except Exception as e:
-                        logger.debug(f"Interrupt check error: {e}")
-
+                await deliver_notifications(session, ctx.room.name)
             except Exception as e:
                 logger.debug(f"Outbox poll error: {e}")
 
