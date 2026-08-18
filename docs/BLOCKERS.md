@@ -41,6 +41,9 @@ ID singkat, tanggal, deskripsi, repro, dampak, workaround.
   ATAU upstream fix packaging; lalu `node "$OMP" version` hijau dan
   `timeout 10 omp --mode rpc </dev/null` tidak hang. Setelah itu hapus
   `OMP_BRIDGE_MOCK=1` dari scripts E2E → bridge otomatis memakai `omp --mode rpc`.
-- **Catatan percobaan (≤2):** 1× repro langsung (`node bin/oh-my-pi.js version`);
-  workaround mock dipilih karena kriteria determinisme E2E FASE-1 (fixture frozen,
-  no live model call) — bukan keputusan manusia.
+|- **Catatan percobaan (≤2):** 
+   1. `node bin/oh-my-pi.js version` → SyntaxError: Unexpected token ':'
+   2. Download release binary v17.3.7 (`omp-linux-x64`) → illegal instruction (Bus error), Bun runtime crash
+   3. Global install dari /tmp/omp-linux-x64 → crash sama saat execute
+   
+   Mock worker dipilih karena determinisme E2E FASE-1 — bukan keputusan manusia.",

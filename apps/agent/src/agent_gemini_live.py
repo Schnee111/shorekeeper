@@ -91,15 +91,36 @@ SHOREKEEPER_INSTRUCTIONS = textwrap.dedent(
       1. YOU MUST CALL `delegate_task(title, instruction, lane)` IMMEDIATELY.
       2. NEVER promise "sudah kuserahkan ke worker" or "sedang diproses di background" UNLESS `delegate_task` has actually been executed!
     - When Schnee asks for progress or if a task is done ("sudah belum?"), YOU MUST CALL `check_task_status(task_id)` to read the actual SQLite status before speaking. NEVER guess or invent that a worker is still working!
+    
+    # 2A. Proactivity (Sprint A)
+    - After completing an action: state result briefly (1 sentence), then offer ONE optional next step as a short question.
+      Good: "Sudah. Mau kubuatkan ringkasannya?" 
+      Bad: listing 3+ suggestions at once.
+    - If user refuses or says "cukup": accept directly, close with 1 sentence, do not offer again.
+    - If all done: brief statement only, no need to fill silence.
+    - Match user energy: if user is rushed → shorter responses.
+    
+    # 2B. Anti language-drift
+    - Balas dalam bahasa yang sedang dipakai user. Jika user campur Indonesia-Inggris, balas Indonesia dengan istilah teknis tetap Inggris. Jangan pindah ke Inggris penuh kecuali user yang melakukannya.
+    
+    # 2C. Brevity relaxation
+    - Jawaban tetap ringkas untuk voice, tapi follow-up opsional diperbolehkan; boleh 2-4 kalimat untuk pertanyaan konversasional (bukan cuma 1-3 kaku).
 
-    # 3. Tool Routing
+    # 3. Context Injection (Sprint A.2)
+    - [KONTEKS SAAT INI] blok akan disuntikkan otomatis oleh agent saat memulai sesi berisi:
+      * Preferensi user dari MemPalace
+      * 5 task terakhir dari SQLite (task_id, intent, status)
+      * Total ≤ 1000 token. Gunakan konteks ini untuk respon lebih relevan.
+    
+    # 4. Tool Routing
     - `web_search(query)`: Call when Schnee asks for real-time information on the internet, current news, weather, tech docs, or external facts. Verbally say "Biar kucari di web dulu." before calling.
     - `delegate_task(title, instruction, lane)`: Call ONCE when Schnee asks to code, investigate, edit files, research, or run background operations. Verbally reply with a brief confirmation (e.g. "Sudah kucatat untuk dikerjakan worker di background.").
     - `check_task_status(task_id)`: Call when Schnee asks "bagaimana status task?", "sudah selesai belum?", or asks about pending work. Read back the actual store status briefly in natural words.
     - `get_current_time()`: Call when Schnee asks for the current time, date, day, or year.
     - `consult(topic)`: Call when Schnee asks about overall active projects, system architecture, or past long-term memory.
+    - `memory_search(query)`: Call when Schnee asks tentang pengetahuan jangka panjang, keputusan masa lalu, arsitektur sistem, atau hal yang tidak ada di memori pendek konteks saat ini. Query MemPalace MCP HTTP untuk mencari drawer/diaries berdasarkan topik.
 
-    # 4. Boundaries & Guardrails
+    # 5. Boundaries & Guardrails
     - Do NOT execute tasks, code, or terminal commands yourself.
     - Do NOT fabricate status, numbers, or progress — only read what tools return.
     - Do NOT mention legacy names, other assistants, or technical tool parameters.
@@ -214,6 +235,52 @@ class ShorekeeperAgent(Agent):
         return summary
 
     @function_tool
+    async def memory_search(self, query: str) -> str:
+        """Search MemPalace knowledge graph for long-term memory about projects, decisions, and architecture.
+        
+        Args:
+            query: Search keywords for long-term memory lookup (e.g., 'decision why used timescaledb', 'MemPalace setup')
+            
+        This tool queries MemPalace MCP HTTP to find drawers/diaries based on topic.
+        Timeout: 1.5s. If down → return natural error message.
+        """
+        logger.info(f"Searching MemPalace: {query}")
+        try:
+            # Get MCP endpoint from environment (set by user/config)
+            mcp_endpoint = os.getenv("MEMPALACE_MCP_HTTP_ENDPOINT", "")
+            mcp_token = os.getenv("MEMPALACE_MCP_HTTP_TOKEN", "")
+            
+            if not mcp_endpoint or not mcp_token:
+                return "Aku sedang kesulitan mengakses memori jangka panjangku — konfigurasi MCP belum tersedia."
+            
+            async with aiohttp.ClientSession() as session:
+                url = f"{mcp_endpoint}/search"
+                headers = {"Authorization": f"Bearer {mcp_token}"}
+                params = {"query": query, "limit": 3}
+                
+                async with session.get(url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=1.5)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        results = data.get("results", [])
+                        if not results:
+                            return f"Tidak ditemukan ingatan terkait '{query}' dalam memoriku."
+                        
+                        items = []
+                        for r in results[:3]:
+                            title = r.get("title", "tanpa judul")
+                            preview = r.get("content", "")[:150]
+                            wing = r.get("wing", "unknown")
+                            items.append(f"- {title} ({wing}): {preview}...")
+                        
+                        return f"Hasil pencarian ingatan untuk '{query}':\n" + "\n".join(items)
+        except aiohttp.TimeoutError:
+            logger.warning(f"MemPalace search timeout: {query}")
+            return "Aku sedang kesulitan mengakses ingatanku sebentar lagi, coba tanya lagi."
+        except Exception as e:
+            logger.warning(f"MemPalace search failed: {e}")
+            return f"Aku sedang kesulitan mengakses ingatanku: {str(e)[:80]}"
+
+    @function_tool
     async def check_task_status(self, task_id: str | None = None) -> str:
         """Check the status of running or recent background tasks from SQLite.
 
@@ -247,11 +314,77 @@ class ShorekeeperAgent(Agent):
             return f"Gagal memeriksa status task: {e}"
 
 
+async def build_session_context(room_name: str) -> str:
+    """Sprint A.2: Bangun blok konteks [KONTEKS SAAT INI] sebelum session.start().
+    
+    Sumber:
+    1. MemPalace (HTTP MCP): preferensi user + proyek aktif (top-k kecil, ringkas).
+    2. SQLite tasks: 5 task terakhir (task_id, intent, status).
+    
+    Graceful fail: jika MemPalace/DB gagal → log warning, lanjut tanpa konteks.
+    Timeout HTTP MemPalace: 1.5 detik. Total ≤ 1000 token.
+    """
+    parts: list[str] = []
+    
+    # 1. MemPalace preferences + active projects
+    mcp_endpoint = os.getenv("MEMPALACE_MCP_HTTP_ENDPOINT", "")
+    mcp_token = os.getenv("MEMPALACE_MCP_HTTP_TOKEN", "")
+    if mcp_endpoint and mcp_token:
+        try:
+            async with aiohttp.ClientSession() as session:
+                headers = {"Authorization": f"Bearer {mcp_token}"}
+                for query, label in [
+                    ("preferensi user", "Preferensi"),
+                    ("proyek aktif", "Proyek Aktif"),
+                ]:
+                    async with session.get(
+                        f"{mcp_endpoint}/search",
+                        headers=headers,
+                        params={"query": query, "limit": 2},
+                        timeout=aiohttp.ClientTimeout(total=1.5),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            results = data.get("results", [])[:2]
+                            if results:
+                                lines = [r.get("content", "")[:120] for r in results]
+                                parts.append(f"{label}: {' | '.join(lines)}")
+        except Exception as e:
+            logger.warning(f"MemPalace context fetch failed: {e}")
+    else:
+        logger.warning("MemPalace MCP endpoint/token not set — skipping context injection")
+    
+    # 2. SQLite: 5 task terakhir
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT task_id, user_intent, status FROM tasks ORDER BY created_at DESC LIMIT 5"
+            ).fetchall()
+            if rows:
+                task_lines = [
+                    f"- {r['task_id']}: {r['user_intent'][:80]} ({r['status']})"
+                    for r in rows
+                ]
+                parts.append("Task Terakhir:\n" + "\n".join(task_lines))
+    except Exception as e:
+        logger.warning(f"Task context fetch failed: {e}")
+    
+    if not parts:
+        return ""
+    
+    context = "[KONTEKS SAAT INI]\n" + "\n\n".join(parts)
+    # Hard cap ~1000 token (~4000 char) — potong jika lebih
+    if len(context) > 4000:
+        context = context[:4000] + "..."
+    return context
+
+
 @server.rtc_session(agent_name="jarvis")
 async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
     await ctx.connect()
-
+    
     # Wait for participant to join
     participant = None
     voice = FALLBACK_VOICE
@@ -266,16 +399,19 @@ async def my_agent(ctx: JobContext):
         logger.warning("Participant wait timeout — using default voice")
     except Exception as e:
         logger.warning(f"Error resolving participant attributes: {e}")
-
+    
+    # Sprint A.2: Context injection (build_session_context)
+    context_block = await build_session_context(ctx.room.name)
+    
     gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not gemini_api_key:
         logger.error("GEMINI_API_KEY / GOOGLE_API_KEY is not set in environment!")
-
+    
     # Validate that voice is a valid Gemini voice; if user sent Fish Audio hash, fallback to Aoede
     if voice not in VALID_GEMINI_VOICES:
         logger.warning(f"Voice '{voice}' is not a valid Gemini voice — falling back to '{FALLBACK_VOICE}'")
         voice = FALLBACK_VOICE
-
+    
     # Native Gemini Live Multimodal Realtime Model
     model = RealtimeModel(
         model="gemini-3.1-flash-live-preview",
@@ -292,7 +428,10 @@ async def my_agent(ctx: JobContext):
     except Exception as te:
         logger.warning(f"google.TTS init failed: {te}")
 
-    agent = ShorekeeperAgent(instructions=SHOREKEEPER_INSTRUCTIONS, room_name=ctx.room.name)
+    agent = ShorekeeperAgent(
+        instructions=SHOREKEEPER_INSTRUCTIONS + ("\n\n" + context_block if context_block else ""),
+        room_name=ctx.room.name,
+    )
     session_kwargs = {"llm": model}
     if tts_model:
         session_kwargs["tts"] = tts_model
