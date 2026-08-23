@@ -1,5 +1,7 @@
 import asyncio
+import contextlib
 import datetime
+import inspect
 import logging
 import os
 import sqlite3
@@ -152,6 +154,8 @@ server = AgentServer(
     # Prod default 8081 — konflik dengan jarvis-agent lama di VPS.
     # Default 0 = port acak bebas (paling aman, tidak pernah bentrok).
     port=int(os.getenv("SHOREKEEPER_AGENT_HTTP_PORT", "0")),
+    # Bind localhost only — akses publik hanya via domain/Nginx.
+    host=os.getenv("SHOREKEEPER_AGENT_HTTP_HOST", "127.0.0.1"),
 )
 
 FALLBACK_VOICE = "Aoede"
@@ -519,11 +523,15 @@ async def deliver_notifications(session, room_name: str, db_path: str | None = N
     utterance = coalesce_notifications(claimed)
     claimed_ids = [r["task_id"] for r in claimed]
     try:
-        handle = await session.say(utterance)
-        # C.2: tunggu ucapan selesai/terinterupsi, lalu cek SpeechHandle.interrupted
-        wait = getattr(handle, "wait_if_not_interrupted", None)
-        if wait is not None:
-            await wait()
+        # AgentSession.say() returns SpeechHandle (awaitable or wait_for_playout)
+        res = session.say(utterance)
+        handle = await res if inspect.isawaitable(res) else res
+
+        # C.2: tunggu ucapan selesai dimainkan, lalu cek SpeechHandle.interrupted
+        wait_playout = getattr(handle, "wait_for_playout", None)
+        if wait_playout is not None and callable(wait_playout):
+            await wait_playout()
+
         if getattr(handle, "interrupted", False):
             logger.info("Notification interrupted — rollback for re-offer")
             _rollback_delivered(claimed_ids, db)
@@ -671,10 +679,8 @@ async def my_agent(ctx: JobContext):
 
     async def cancel_resumption():
         resumption_ref.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await resumption_ref
-        except asyncio.CancelledError:
-            pass
 
     ctx.add_shutdown_callback(cancel_resumption)
 
@@ -682,6 +688,8 @@ async def my_agent(ctx: JobContext):
     async def outbox_notification_loop():
         while True:
             await asyncio.sleep(2.0)
+            if getattr(session, "_activity", None) is None or getattr(session, "_closing_task", None) is not None:
+                continue
             try:
                 await deliver_notifications(session, ctx.room.name)
             except Exception as e:
@@ -691,10 +699,8 @@ async def my_agent(ctx: JobContext):
 
     async def cancel_outbox():
         task_ref.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task_ref
-        except asyncio.CancelledError:
-            pass
 
     ctx.add_shutdown_callback(cancel_outbox)
 

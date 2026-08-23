@@ -1,14 +1,21 @@
 node_modules/
 data/
 .env
+.env.*
+!.env.example
 *.log
 dist/
+build/
 .venv/
 __pycache__/
 *.pyc
 *.tsbuildinfo
+.pytest_cache/
+.ruff_cache/
 scripts/e2e/logs/
 .eslintcache
+.turbo/
+.DS_Store
 # Fixture repo-a/b/c adalah nested git repo yang di-bootstrap deterministik
 # (scripts/e2e/bootstrap-fixture.sh) — internal commit-nya tidak masuk monorepo.
 tests/fixtures/repo-a/

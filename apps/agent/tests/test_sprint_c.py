@@ -16,6 +16,9 @@ class FakeSpeechHandle:
         self.interrupted = interrupted
         self.waited = False
 
+    async def wait_for_playout(self):
+        self.waited = True
+
     async def wait_if_not_interrupted(self):
         self.waited = True
 

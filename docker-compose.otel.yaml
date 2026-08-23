@@ -20,8 +20,8 @@ services:
     volumes:
       - ./deploy/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
-      - "4318:4318"   # OTLP/HTTP (trace + metrics) dari aplikasi
-      - "13133:13133" # health_check extension
+      - "127.0.0.1:4318:4318"   # OTLP/HTTP (trace + metrics) dari aplikasi
+      - "127.0.0.1:13133:13133" # health_check extension
     depends_on:
       - jaeger
     restart: unless-stopped
@@ -29,11 +29,12 @@ services:
   jaeger:
     image: quay.io/jaegertracing/all-in-one:1.62.0
     container_name: sk-jaeger
+    command: ["--query.base-path=/jaeger"]
     environment:
       COLLECTOR_OTLP_ENABLED: "true"   # terima OTLP gRPC dari otel-collector
     ports:
-      - "16686:16686" # UI + query API
-      - "4317:4317"   # OTLP gRPC (internal dari collector; expose utk debugging)
+      - "127.0.0.1:16686:16686" # UI + query API
+      - "127.0.0.1:4317:4317"   # OTLP gRPC (internal dari collector; expose utk debugging)
     restart: unless-stopped
 
   prometheus:
@@ -45,7 +46,7 @@ services:
     volumes:
       - ./deploy/otel/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     depends_on:
       - otel-collector
     restart: unless-stopped

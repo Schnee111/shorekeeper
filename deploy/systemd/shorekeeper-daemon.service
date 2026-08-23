@@ -6,9 +6,9 @@ After=network.target
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/projects/shorekeeper
-EnvironmentFile=/home/ubuntu/projects/shorekeeper/apps/agent/.env.local
 Environment="PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="OMP_BRIDGE_MOCK=1"        # Production mode: mock executor (fast, no Hermes dependency)
+# Environment="HERMES_WS_URL=ws://127.0.0.1:9119/api/ws"   # Temporarily disabled — Hermes gateway WS not accepting connections
 Environment="SHOREKEEPER_DB=/home/ubuntu/projects/shorekeeper/data/tasks.db"
 Environment="SK_MAX_PARALLEL=3"
 # 15 menit per task

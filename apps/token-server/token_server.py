@@ -131,4 +131,4 @@ app.router.add_options("/token", _cors_options)
 
 if __name__ == "__main__":
     print(f"Shorekeeper token server starting on :{PORT} (agent: {AGENT_NAME})")
-    web.run_app(app, port=PORT)
+    web.run_app(app, port=PORT, host="127.0.0.1")
