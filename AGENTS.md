@@ -1,7 +1,7 @@
 # AGENTS.md — Shorekeeper monorepo
 
-Hand-written governance file (TASK-1.1). Source of truth untuk konvensi kerja di repo ini.
-Baca `TASKS.md` (plan), `docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/api.md` sebelum kerja.
+Hand-written governance file. Source of truth untuk konvensi kerja di repo ini.
+Baca `README.md`, `docs/ARCHITECTURE.md`, `docs/PRD.md`, `docs/api.md` sebelum kerja.
 
 ## Stack
 
@@ -55,8 +55,8 @@ scripts/eval/       golden runner: lint-golden.sh, golden-run.sh (grade.mjs), te
 scripts/otel/       up.sh/down.sh stack observability self-host (FASE-3)
 scripts/ops/        backup-db.sh / restore-db.sh task store (FASE-3)
 deploy/             otel/ (collector+prometheus config), systemd/ (unit VPS) (FASE-3)
-docs/               PRD, ARCHITECTURE, api.md, adr/, agents/, runbooks/, observability.md,
-                    EDGE-CASES.md, DEPLOYMENT.md, golden-set/ (kasus + REPORT-<date>.json)
+docs/               README-linked: PRD, ARCHITECTURE, api.md, adr/, agents/, runbooks/, observability.md,
+                    EDGE-CASES.md, DEPLOYMENT.md, BLOCKERS.md, HANDOFF_DESIGN.md, golden-set/ (kasus YAML)
 tests/              fixtures/, unit/, behavioral/, e2e/, edge/ (tests edge di packages/*/tests/edge)
 data/               tasks.db + artifacts/ + ownership.json (git-ignored)
 ```
@@ -125,7 +125,7 @@ bash scripts/e2e/smoke-omp.sh
 curl https://api.berbayar.example/v1 ...
 ```
 
-- Commit: `TASK-x.y: <ringkas>` per task; branch per task, squash ke main.
+- Commit: conventional commits (`feat(scope): …`, `fix(scope): …`, `chore: …`); branch per task, squash ke main.
 - Status task: hanya `queued → running → done|failed|cancelled|blocked`; transisi invalid ditolak.
 - Summary ≤ 200 kata (kontrak voice); artifact besar → filesystem `data/artifacts/<task_id>/`, DB hanya path.
 - Single-writer store = orchestrator; worker lain tidak pernah menulis DB.
