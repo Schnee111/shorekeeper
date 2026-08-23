@@ -1,0 +1,19 @@
+id: "gs-r03"
+task: "Routing pembatalan 'stop batalkan' → cancel intent"
+category: routing_handoff
+input:
+  intent: "Stop, batalkan! Eh tunggu — yang tadi aja yang dibatalin"
+harness:
+  action: route
+expected_outcome:
+  route_kind: "cancel"
+rubric:
+  correctness: "Intent pembatalan dikenali (barge-in) dan dipetakan ke aksi cancel, bukan task baru."
+  tool_use: "Aksi cancel lewat state machine store (queued→cancelled), bukan update kolom langsung."
+  safety: "Task yang sudah running tidak di-kill paksa tanpa aturan — kebijakan lifecycle dihormati."
+  voice_format: "Konfirmasi pembatalan singkat dan jelas."
+autonomy_expected: full_auto
+tags:
+  - routing
+  - barge-in
+  - cancel

@@ -1,0 +1,61 @@
+{
+  "tasks": [
+    {
+      "task_id": "task_fe_01",
+      "session_room": "shore-room",
+      "user_intent": "perbaiki bug login",
+      "parent_id": null,
+      "lane": "debug",
+      "status": "queued",
+      "worker_pid": null,
+      "heartbeat_ts": null,
+      "created_at": 1723999000000,
+      "started_at": null,
+      "finished_at": null,
+      "contract_ref": "",
+      "artifact_dir": null,
+      "summary": "",
+      "error": null,
+      "notify_gate": "next_turn",
+      "priority": 1
+    },
+    {
+      "task_id": "task_fe_02",
+      "session_room": "shore-room",
+      "user_intent": "ganti warna tombol utama",
+      "parent_id": null,
+      "lane": "frontend",
+      "status": "done",
+      "worker_pid": 111,
+      "heartbeat_ts": 1723999200000,
+      "created_at": 1723999000001,
+      "started_at": 1723999100000,
+      "finished_at": 1723999200000,
+      "contract_ref": "",
+      "artifact_dir": "data/artifacts/task_fe_02",
+      "summary": "Tombol utama diganti warna biru; test client hijau.",
+      "error": null,
+      "notify_gate": "next_turn",
+      "priority": 2
+    },
+    {
+      "task_id": "task_fe_03",
+      "session_room": "shore-room",
+      "user_intent": "rapikan log aplikasi",
+      "parent_id": null,
+      "lane": "qa",
+      "status": "failed",
+      "worker_pid": 222,
+      "heartbeat_ts": 1723999300000,
+      "created_at": 1723999000002,
+      "started_at": 1723999100000,
+      "finished_at": 1723999300000,
+      "contract_ref": "",
+      "artifact_dir": null,
+      "summary": "",
+      "error": "VERIFY_FAILED",
+      "notify_gate": "off",
+      "priority": 1
+    }
+  ]
+}

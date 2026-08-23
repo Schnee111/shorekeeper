@@ -1,0 +1,17 @@
+[Unit]
+Description=Shorekeeper LiveKit Agent (Gemini Live voice front, agent=shorekeeper)
+After=network.target shorekeeper-token-server.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/projects/shorekeeper/apps/agent
+EnvironmentFile=/home/ubuntu/projects/shorekeeper/apps/agent/.env.local
+ExecStart=/home/ubuntu/.local/bin/uv run --project /home/ubuntu/projects/shorekeeper/apps/agent python src/agent_gemini_live.py start
+Restart=always
+RestartSec=5
+MemoryMax=800M
+TasksMax=50
+
+[Install]
+WantedBy=multi-user.target

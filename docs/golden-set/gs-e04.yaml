@@ -1,0 +1,18 @@
+id: "gs-e04"
+task: "Transisi invalid ditolak state machine (done→running)"
+category: edge_case
+input:
+  task_id: "gs_tr"
+harness:
+  action: invalid_transition
+expected_outcome:
+  error_code: "INVALID_TRANSITION"
+rubric:
+  correctness: "done→running ditolak dengan error terstruktur INVALID_TRANSITION (bukan silent-allow)."
+  tool_use: "canTransition satu-satunya gerbang status (tidak ada UPDATE SQL langsung)."
+  safety: "Status terminal tidak bisa dibalik diam-diam (audit konsisten)."
+  voice_format: "Error internal tidak bocor ke narasi user (kode saja di log)."
+autonomy_expected: full_auto
+tags:
+  - edge
+  - state-machine

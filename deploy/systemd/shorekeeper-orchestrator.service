@@ -1,0 +1,26 @@
+# shorekeeper-orchestrator.service — unit orchestrator monorepo (TASK-3.4).
+#
+# Orchestrator = WorkerManager + MergeOrchestrator loop (driver E2E dapat
+# digantikan daemon; saat ini orchestrator dijalankan via CLI/E2E — unit ini
+# disiapkan untuk deployment VPS nyata, lihat docs/DEPLOYMENT.md).
+[Unit]
+Description=Shorekeeper orchestrator (worker manager + merge gate)
+After=network-online.target shorekeeper-otel.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/shorekeeper
+EnvironmentFile=/opt/shorekeeper/.env
+# Entry point daemon orchestrator (FASE berikutnya: apps/orchestrator) —
+# saat ini jalankan watcher CLI task-store + manager pump (placeholder exec).
+ExecStart=/usr/bin/node packages/task-store/dist/cli.js status active
+Restart=on-failure
+RestartSec=5
+# Hard rule privasi/keamanan: tidak ada akses ke luar repo yang dibutuhkan.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+pyproject.toml
+src/shorekeeper_agent.egg-info/PKG-INFO
+src/shorekeeper_agent.egg-info/SOURCES.txt
+src/shorekeeper_agent.egg-info/dependency_links.txt
+src/shorekeeper_agent.egg-info/requires.txt
+src/shorekeeper_agent.egg-info/top_level.txt
+tests/test_smoke.py
+tests/test_sprint_a.py
+tests/test_sprint_b.py
+tests/test_sprint_c.py

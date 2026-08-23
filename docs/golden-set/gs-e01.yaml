@@ -1,0 +1,21 @@
+id: "gs-e01"
+task: "Delegate ganda task_id sama (retry front) → idempotent: 1 task, 1 spawn"
+category: edge_case
+input:
+  task_id: "gs_dup"
+  calls: 2
+harness:
+  action: delegate_idempotent
+expected_outcome:
+  spawn_count: 1
+  task_count: 1
+rubric:
+  correctness: "Call kedua tidak mendobel kerja: spawn tepat 1, store tepat 1 task."
+  tool_use: "Single-writer store + cek status sebelum spawn (running/queued/terminal)."
+  safety: "Tanpa dobel eksekusi, efek samping (commit) tidak ganda."
+  voice_format: "User tidak diberi notifikasi ganda."
+autonomy_expected: full_auto
+tags:
+  - edge
+  - idempotency
+  - race

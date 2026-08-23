@@ -1,0 +1,19 @@
+# shorekeeper-otel.service — stack observability self-host via docker compose.
+# (docker compose menjalankan 3 container: collector, jaeger, prometheus.)
+[Unit]
+Description=Shorekeeper observability stack (OTel collector + Jaeger + Prometheus)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+User=ubuntu
+WorkingDirectory=/opt/shorekeeper
+ExecStart=/usr/bin/docker compose -f docker-compose.otel.yaml up -d
+ExecStop=/usr/bin/docker compose -f docker-compose.otel.yaml down --remove-orphans
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

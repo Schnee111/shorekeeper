@@ -1,0 +1,44 @@
+# otel-collector-config.yaml — konfigurasi kolektor OTel self-host (TASK-3.1, ADR-004).
+#
+# Alur: aplikasi Shorekeeper (service.name=shorekeeper-orchestrator) →
+# OTLP/HTTP :4318 → [traces → jaeger:4317] [metrics → prometheus exporter :8889].
+# Privasi: aplikasi TIDAK mengirim isi percakapan (sanitize di SDK, lihat
+# packages/observability). Collector tidak menambah/mengubah payload.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  prometheus:
+    # TANPA namespace: nama metric tetap persis kontrak TASK-3.1
+    # (task_done_total dst. — query Prometheus pakai nama itu, lihat
+    # docs/observability.md).
+    endpoint: 0.0.0.0:8889
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]

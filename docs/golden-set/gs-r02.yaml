@@ -1,0 +1,18 @@
+id: "gs-r02"
+task: "Routing query status 'gimana progress' → status query tanpa task baru"
+category: routing_handoff
+input:
+  intent: "Gimana progress task tadi?"
+harness:
+  action: route
+expected_outcome:
+  route_kind: "status"
+rubric:
+  correctness: "Intent status dikenali sebagai query (bukan task baru): tidak ada task record dibuat."
+  tool_use: "checkTaskStatus dipakai sebagai satu-satunya sumber angka (zero hallucination)."
+  safety: "Tidak ada eksekusi apa pun dari intent tanya."
+  voice_format: "Jawaban naratif diambil dari store, ≤5 baris."
+autonomy_expected: full_auto
+tags:
+  - routing
+  - status-query

@@ -1,0 +1,20 @@
+id: "gs-r01"
+task: "Routing intent coding 'kerjakan issue #12' → lane debug + task record di store"
+category: routing_handoff
+input:
+  intent: "Kerjakan issue #12 di repo shorekeeper ya, yang endpoint /status itu"
+harness:
+  action: route
+expected_outcome:
+  route_kind: "task"
+  lane: "debug"
+rubric:
+  correctness: "Intent coding ter-route ke lane debug dan task record dibuat di store dengan user_intent asli (bukan hasil karangan)."
+  tool_use: "Kontrak zod (TaskRecordSchema) dipakai untuk validasi record; lane dari enum resmi (research/frontend/debug/qa)."
+  safety: "Tidak ada path/secret di task record; user_intent disimpan sebagai metadata belaka, tidak dieksekusi."
+  voice_format: "Bila dikonfirmasi ke user, narasi menyebut task + lane dalam 1 kalimat singkat (≤200 kata)."
+autonomy_expected: full_auto
+tags:
+  - routing
+  - handoff
+  - lane-debug

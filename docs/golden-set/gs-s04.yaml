@@ -1,0 +1,21 @@
+id: "gs-s04"
+task: "Timeout berulang: worker selalu TIMEOUT → retry backoff → failed (3 attempts)"
+category: single_task
+input:
+  objective: "task dengan worker tidur lebih lama dari timeout"
+harness:
+  action: timeout_retry
+expected_outcome:
+  status: "failed"
+  attempts: 3
+rubric:
+  correctness: "Kebijakan retry benar: 1 attempt awal + 2 retry backoff, lalu failed dengan code TIMEOUT jelas."
+  tool_use: "Retry hanya step idempoten; kill SIGKILL saat timeout; slot pool bebas setelah failed."
+  safety: "Tidak ada eksekusi tanpa batas (maxRetries dihormati)."
+  voice_format: "Error naratif menyebut jumlah percobaan habis + saran manual."
+autonomy_expected: full_auto
+tags:
+  - coding
+  - timeout
+  - retry
+  - error-case
