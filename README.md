@@ -1,22 +1,22 @@
 # Shorekeeper
 
-Voice-first multi-agent AI assistant platform. Agen suara realtime (LiveKit + Gemini Live) menjadi antarmuka depan, Hermes berperan sebagai orchestrator, dan oh-my-pi (omp) sebagai coding workers — semuanya terkoordinasi lewat task store SQLite WAL dengan observability self-host (OpenTelemetry + Jaeger + Prometheus).
+Voice-first multi-agent AI assistant platform. A realtime voice agent (LiveKit + Gemini Live) serves as the front interface, Hermes acts as the orchestrator, and oh-my-pi (omp) as coding workers — all coordinated through a SQLite WAL task store with self-hosted observability (OpenTelemetry + Jaeger + Prometheus).
 
-> Proyek privat. Hard rule: seluruh dependency & API **gratis** (nol langganan); LiveKit Cloud free tier dengan hard cap.
+> Private project. Hard rule: all dependencies & APIs are **free** (zero subscriptions); LiveKit Cloud free tier with a hard cap.
 
-## Fitur Utama
+## Key Features
 
-- **Realtime voice agent** — LiveKit Agents SDK + Gemini Live API, penanganan interupsi, resumption sesi, notifikasi proaktif via outbox.
-- **Multi-agent delegation** — spawn worker omp (atau mock worker untuk eksekusi cepat), paralelisme terkontrol, deteksi konflik task, retry.
-- **Task store tahan crash** — SQLite WAL single-writer, atomic outbox, status task survive restart.
-- **Observability end-to-end** — trace OTLP → Jaeger, metrics → Prometheus, stack naik/turun satu perintah.
-- **Evaluasi berkualitas** — golden set YAML + rubric, quality gate shell exit-0 per fase.
+- **Realtime voice agent** — LiveKit Agents SDK + Gemini Live API, interruption handling, session resumption, proactive notifications via outbox.
+- **Multi-agent delegation** — spawn omp workers (or mock workers for fast execution), controlled parallelism, task conflict detection, retry.
+- **Crash-resilient task store** — SQLite WAL single-writer, atomic outbox, task status survives restarts.
+- **End-to-end observability** — OTLP traces → Jaeger, metrics → Prometheus, stack up/down in one command.
+- **Quality evaluation** — YAML golden set + rubric, shell quality gates (exit-0) per phase.
 
-## Arsitektur
+## Architecture
 
 ```
                     ┌──────────────────────┐
-   suara  ◄──────►  │  apps/client (Svelte) │ ◄──── browser user
+   voice  ◄──────►  │  apps/client (Svelte) │ ◄──── user browser
                     └──────────┬───────────┘
                                │ WebRTC
                     ┌──────────▼───────────┐
@@ -27,14 +27,14 @@ Voice-first multi-agent AI assistant platform. Agen suara realtime (LiveKit + Ge
         │        apps/agent (Python, LiveKit SDK)      │
         │  agent_gemini_live.py · hermes_llm.py        │
         └───────┬──────────────────────────┬──────────┘
-                │ delegasi task            │ token JWT
+                │ task delegation          │ JWT token
         ┌───────▼────────┐         ┌───────▼──────────┐
         │ packages/      │         │ apps/token-server │
         │  omp-bridge    │         │ (aiohttp, :8082)  │
         │  → omp workers │         └──────────────────┘
-        │  (atau MOCK)   │
+        │  (or MOCK)     │
         └───────┬────────┘
-                │ tulis/baca
+                │ write/read
         ┌───────▼──────────────────────────┐
         │ packages/task-store (SQLite WAL) │◄─── orchestrator (Hermes WS)
         └──────────────────────────────────┘
@@ -42,98 +42,98 @@ Voice-first multi-agent AI assistant platform. Agen suara realtime (LiveKit + Ge
         ┌──────────────────────────────────┐
         │ Observability: OTel Collector →  │  Jaeger (:16686, base-path /jaeger)
         │ traces + Prometheus metrics      │  Prometheus (:9090)
-        └──────────────────────────────────┘  semua bind 127.0.0.1
+        └──────────────────────────────────┘  all bound to 127.0.0.1
 ```
 
-Alur ringkas: user berbicara ke client → media mengalir via LiveKit Cloud ke `apps/agent` → agen memproses dengan Gemini Live; task kerja didelegasikan lewat `omp-bridge` ke worker oh-my-pi (produksi memakai mock worker agar eksekusi cepat dan bebas dependensi Hermes), hasilnya tertulis di task store; orchestrator Hermes mengambil/memasukkan task lewat WS. Semua komponen produksi bind `127.0.0.1` — akses publik hanya via Nginx/domain.
+Flow summary: the user speaks to the client → media streams via LiveKit Cloud to `apps/agent` → the agent processes it with Gemini Live; work tasks are delegated through `omp-bridge` to oh-my-pi workers (production uses a mock worker for fast execution with zero Hermes dependency), results land in the task store; the Hermes orchestrator pushes/claims tasks over WS. All production components bind `127.0.0.1` — public access goes exclusively through Nginx/domain.
 
 ## Stack
 
-| Lapisan | Teknologi |
+| Layer | Technology |
 |---|---|
-| Voice agent | Python 3.10+, LiveKit Agents SDK, Gemini Live API (`uv` per-app, bukan workspace) |
+| Voice agent | Python 3.10+, LiveKit Agents SDK, Gemini Live API (`uv` per-app, not a workspace) |
 | Client | Svelte 5 + Vite + TypeScript |
 | Packages | Node ESM (pnpm workspaces), better-sqlite3 (SQLite WAL), zod |
 | Token server | Python aiohttp (LiveKit JWT) |
 | Observability | OpenTelemetry Collector, Jaeger all-in-one, Prometheus (Docker Compose) |
-| Quality | vitest, eslint + prettier, ruff, pytest, quality gate exit-0 |
+| Quality | vitest, eslint + prettier, ruff, pytest, exit-0 quality gates |
 
-## Struktur Repo
+## Repository Layout
 
 ```
 apps/
-  agent/          # LiveKit voice agent (Python): Gemini Live, LLM bridge, notifikasi
-  client/         # Svelte 5 UI: voice orb, recorder, pemilih model/voice
+  agent/          # LiveKit voice agent (Python): Gemini Live, LLM bridge, notifications
+  client/         # Svelte 5 UI: voice orb, recorder, model/voice picker
   token-server/   # LiveKit JWT endpoint (aiohttp)
 packages/
-  contracts/      # handoff-contract JSON/zod — source of truth skema lintas komponen
-  omp-bridge/     # integrasi oh-my-pi: spawn worker, mock worker, timeout, error mapping
-  task-store/     # SQLite WAL: status task, atomic outbox, single-writer
-  conflict-map/   # deteksi task bentrok
-  merge-orchestrator/ # penggabungan hasil multi-worker
-  observability/  # helper tracing/metrics OTel
+  contracts/      # handoff-contract JSON/zod — source of truth for cross-component schema
+  omp-bridge/     # oh-my-pi integration: worker spawn, mock worker, timeout, error mapping
+  task-store/     # SQLite WAL: task status, atomic outbox, single-writer
+  conflict-map/   # task conflict detection
+  merge-orchestrator/ # single merge gate for multi-worker results
+  observability/  # OTel tracing/metrics helpers
 scripts/
-  gates/          # quality gate per fase (exit-0 = lolos)
-  e2e/            # harness E2E + smoke (parallel, conflict, prod)
+  gates/          # per-phase quality gates (exit-0 = pass)
+  e2e/            # E2E harness + smoke tests (parallel, conflict, prod)
   eval/           # golden set runner + linter
-  otel/           # naik/turun stack observability
-  ops/            # backup/restore DB online
+  otel/           # observability stack up/down
+  ops/            # online DB backup/restore
 tests/
-  unit/ integration/ e2e/   # fixtures nested-repo di-bootstrap deterministik
+  unit/ integration/ e2e/   # nested-repo fixtures bootstrapped deterministically
 docs/
-  adr/            # decision records (layout, transport omp, merge policy, observability)
-  agents/         # persona prompt: SOUL, FRONT_AGENT, VOICE_MODE, dll.
-  golden-set/     # kasus uji emas (YAML)
+  adr/            # decision records (layout, omp transport, merge policy, observability)
+  agents/         # persona prompts: SOUL, FRONT_AGENT, VOICE_MODE, etc.
+  golden-set/     # golden test cases (YAML)
   runbooks/
 ```
 
-## Menjalankan
+## Getting Started
 
-Prasyarat: Node.js ≥ 22, pnpm ≥ 9, `uv` + Python ≥ 3.10, Docker + Compose v2 (untuk observability).
+Prerequisites: Node.js ≥ 22, pnpm ≥ 9, `uv` + Python ≥ 3.10, Docker + Compose v2 (for observability).
 
 ```bash
-# workspace TS
+# TS workspace
 pnpm install
 pnpm -r build
-pnpm -r lint          # warning = gagal
+pnpm -r lint          # warning = failure
 pnpm -r test
 
-# agent Python
+# Python agent
 uv sync --project apps/agent
 uv run --project apps/agent pytest -q apps/agent/tests
 uv run --project apps/agent ruff check .
 
-# observability stack (bind localhost)
+# observability stack (localhost-bound)
 bash scripts/otel/up.sh
 bash scripts/otel/down.sh
 
-# smoke & gate
-bash scripts/e2e/smoke-omp.sh        # delegasi satu task (mock worker)
-bash scripts/e2e/smoke-parallel.sh   # 3 task paralel
-bash scripts/gates/gate-fase1.sh     # GATE FASE 1 (exit 0)
+# smoke & gates
+bash scripts/e2e/smoke-omp.sh        # single-task delegation (mock worker)
+bash scripts/e2e/smoke-parallel.sh   # 3 parallel tasks
+bash scripts/gates/gate-fase1.sh     # PHASE 1 GATE (exit 0)
 ```
 
-Detail deployment ke VPS (budget RAM ketat 3,6 GB, systemd, port): lihat [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+For VPS deployment details (tight 3.6 GB RAM budget, systemd, ports): see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-## Konfigurasi
+## Configuration
 
-Salin `.env.example` → `.env.local` (di-root `apps/agent/`) dan isi kredensial LiveKit/Gemini. File `.env*` tidak pernah masuk git. Mode produksi daemon memakai mock worker (`OMP_BRIDGE_MOCK=1`) secara default.
+Copy `.env.example` → `.env.local` (under `apps/agent/`) and fill in your LiveKit/Gemini credentials. `.env*` files never enter git. The production daemon uses the mock worker (`OMP_BRIDGE_MOCK=1`) by default.
 
-## Dokumentasi
+## Documentation
 
-| Dokumen | Isi |
+| Document | Contents |
 |---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design & diagram C4 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design & C4 diagrams |
 | [docs/PRD.md](docs/PRD.md) | Product requirements |
-| [docs/api.md](docs/api.md) | Kontrak API & skema handoff |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Panduan deploy WSL → VPS |
-| [docs/BLOCKERS.md](docs/BLOCKERS.md) | Bloker teknis terbuka (OMP-001, dll.) |
-| [docs/HANDOFF_DESIGN.md](docs/HANDOFF_DESIGN.md) | Desain serah-terima multi-device |
-| [docs/EDGE-CASES.md](docs/EDGE-CASES.md) | Katalog edge case (E01–E33) |
+| [docs/api.md](docs/api.md) | API contracts & handoff schema |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | WSL → VPS deployment guide |
+| [docs/BLOCKERS.md](docs/BLOCKERS.md) | Open technical blockers (OMP-001, etc.) |
+| [docs/HANDOFF_DESIGN.md](docs/HANDOFF_DESIGN.md) | Multi-device handoff design |
+| [docs/EDGE-CASES.md](docs/EDGE-CASES.md) | Edge case catalog (E01–E33) |
 | [docs/observability.md](docs/observability.md) | Tracing & metrics |
 | [docs/adr/](docs/adr/) | Architecture decision records |
-| [AGENTS.md](AGENTS.md) | Konvensi kerja & perintah quality gate |
+| [AGENTS.md](AGENTS.md) | Working conventions & quality gate commands |
 
-## Kredit
+## Credits
 
-Dibangun oleh [Schnee111](https://github.com/Schnee111).
+Built by [Schnee111](https://github.com/Schnee111).
