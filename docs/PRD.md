@@ -5,7 +5,7 @@
 | Status | Draft v0.1 — siap review |
 | Tanggal | 17 Agustus 2026 |
 | Owner | Orkestrator (Hermes) + user |
-| Dokumen terkait | `ARCHITECTURE.md`, `AGENTS.md`, `TASKS.md`, `TESTING.md`, `API.md`, `docs/golden-set/gs-*.yaml` |
+| Dokumen terkait | `ARCHITECTURE.md`, `AGENTS.md`, `docs/api.md`, `docs/golden-set/gs-*.yaml` |
 | Referensi best practice | `riset-best-practice-dokumen-planning-ai-agent.md` (productmap.io, zowl.app, Anthropic, LiveKit, OpenAI) |
 
 ---

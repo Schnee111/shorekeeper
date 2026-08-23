@@ -109,7 +109,6 @@ Choosing MOCK over continued fixes because:
 
 ### Related Files
 - `docs/adr/0002-omp-transport.md` — Transport decision rationale
-- `docs/SPRINT-VOICE-PRODUCTION.md` — Phase 0 marked BLOCKED
 - `packages/omp-bridge/src/*.ts` — Mock implementation
 - `scripts/gates/gate-voice-production.sh` — Gate accepts PARTIAL_PASS
 

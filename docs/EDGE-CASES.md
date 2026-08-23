@@ -77,7 +77,7 @@ Format per skenario: **Platform fact** (fakta link/infra), **Our behavior**
 
 ---
 
-## Out of scope (fase voice — dicatat sesuai TASKS.md)
+## Out of scope (fase voice)
 
 - **Barge-in / interupsi audio:** VAD + state `listening/speaking`; keputusan
   interupsi di front voice (fase voice). Task store sudah aman (state di luar

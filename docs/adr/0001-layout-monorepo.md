@@ -22,7 +22,7 @@ membuat resolver kaku. Task store SQLite + zod contract dipakai bersama oleh orc
 ## Decision
 
 1. **Lokasi final monorepo: `~/projects/shorekeeper`** (sibling dari repo sumber). Path ini
-   dikunci untuk seluruh fase; semua referensi path di TASKS.md/PRD mengarah ke sini.
+   dikunci untuk seluruh fase; semua referensi path di PRD/AGENTS.md mengarah ke sini.
 2. **Layout (locked):**
    ```
    apps/agent/        Python (uv) — LiveKit agent G3
@@ -33,8 +33,8 @@ membuat resolver kaku. Task store SQLite + zod contract dipakai bersama oleh orc
    scripts/gates/     gate-fase1..3.sh
    scripts/e2e/       harness E2E
    tests/             fixtures/, unit/, behavioral/, e2e/, edge/
-   docs/              PRD, ARCHITECTURE, API, TESTING, adr/, agents/, golden-set/
-   AGENTS.md · TASKS.md · .env.example
+   docs/              PRD, ARCHITECTURE, api.md, adr/, agents/, golden-set/
+   AGENTS.md · README.md · .env.example
    ```
 3. **pnpm-workspace.yaml hanya berisi TS:** `apps/client` + `packages/*`. Python apps
    standalone via `pyproject.toml` masing-masing, dijalankan dengan `uv run --project apps/agent`.
