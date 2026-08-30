@@ -2,7 +2,7 @@
 
 Voice-first multi-agent AI assistant platform. A realtime voice agent (LiveKit + Gemini Live) serves as the front interface, Hermes acts as the orchestrator, and oh-my-pi (omp) as coding workers — all coordinated through a SQLite WAL task store with self-hosted observability (OpenTelemetry + Jaeger + Prometheus).
 
-> Private project. Hard rule: all dependencies & APIs are **free** (zero subscriptions); LiveKit Cloud free tier with a hard cap.
+> Hard rule: all dependencies & APIs are **free** (zero subscriptions); LiveKit Cloud free tier with a hard cap.
 
 ## Key Features
 
@@ -14,35 +14,62 @@ Voice-first multi-agent AI assistant platform. A realtime voice agent (LiveKit +
 
 ## Architecture
 
-```
-                    ┌──────────────────────┐
-   voice  ◄──────►  │  apps/client (Svelte) │ ◄──── user browser
-                    └──────────┬───────────┘
-                               │ WebRTC
-                    ┌──────────▼───────────┐
-                    │    LiveKit Cloud     │  (free tier, hard cap)
-                    └──────────┬───────────┘
-                               │
-        ┌──────────────────────▼──────────────────────┐
-        │        apps/agent (Python, LiveKit SDK)      │
-        │  agent_gemini_live.py · hermes_llm.py        │
-        └───────┬──────────────────────────┬──────────┘
-                │ task delegation          │ JWT token
-        ┌───────▼────────┐         ┌───────▼──────────┐
-        │ packages/      │         │ apps/token-server │
-        │  omp-bridge    │         │ (aiohttp, :8082)  │
-        │  → omp workers │         └──────────────────┘
-        │  (or MOCK)     │
-        └───────┬────────┘
-                │ write/read
-        ┌───────▼──────────────────────────┐
-        │ packages/task-store (SQLite WAL) │◄─── orchestrator (Hermes WS)
-        └──────────────────────────────────┘
+```mermaid
+flowchart TB
+    U(["👤 User (Browser/WebRTC)"]):::user
+    
+    subgraph Frontend["🖥️ Frontend & Client Layer"]
+        CL["apps/client<br/>(Svelte 5 + Vite Voice HUD)"]
+    end
 
-        ┌──────────────────────────────────┐
-        │ Observability: OTel Collector →  │  Jaeger (:16686, base-path /jaeger)
-        │ traces + Prometheus metrics      │  Prometheus (:9090)
-        └──────────────────────────────────┘  all bound to 127.0.0.1
+    subgraph VoiceEngine["🗣️ Realtime Voice Layer"]
+        LK["LiveKit Cloud / SFU<br/>(WebRTC Stream)"]
+        FA["apps/agent<br/>(LiveKit SDK + Gemini Live G3)"]
+        TS["apps/token-server<br/>(aiohttp, :8082 JWT)"]
+    end
+
+    subgraph OrchestrationEngine["🧠 Orchestration & Storage Layer"]
+        ORC["Hermes Orchestrator<br/>(Gateway WS :9119)"]
+        TSK["packages/task-store<br/>(SQLite WAL · Atomic Outbox)"]
+        CFM["packages/conflict-map<br/>(Task Conflict Registry)"]
+        MGO["packages/merge-orchestrator<br/>(Single Merge Gate & Verifier)"]
+    end
+
+    subgraph WorkerEngine["🤖 Worker Execution Engine"]
+        OMP["packages/omp-bridge<br/>(oh-my-pi / MOCK Worker Pool)"]
+        WT["Isolated Git Worktrees<br/>(One-File-One-Owner)"]
+    end
+
+    subgraph Observability["📊 Self-Hosted Observability Stack"]
+        OTEL["OTel Collector<br/>(:4318 OTLP/HTTP)"]
+        JAEGER["Jaeger Tracing<br/>(:16686 /jaeger)"]
+        PROM["Prometheus Metrics<br/>(:9090)"]
+    end
+
+    %% Connections
+    U <-->|"WebRTC Audio"| LK
+    U <-->|"HUD UI & Controls"| CL
+    CL -->|"Request JWT Token"| TS
+    TS -->|"Mint Participant Token"| LK
+    LK <-->|"Realtime Audio Stream"| FA
+    FA <-->|"Delegation / Status Query"| ORC
+    
+    ORC <-->|"State Transactions"| TSK
+    ORC <-->|"Ownership Check"| CFM
+    ORC -->|"Spawn Task Spec"| OMP
+    OMP -->|"Execute in Worktree"| WT
+    
+    WT -->|"Verification Gate"| MGO
+    MGO -->|"Sequential Merge"| TSK
+    
+    OMP -.->|"Telemetry Spans"| OTEL
+    ORC -.->|"Telemetry Spans"| OTEL
+    OTEL --> JAEGER
+    OTEL --> PROM
+
+    %% Styling
+    classDef user fill:#0284c7,stroke:#0369a1,color:#ffffff,stroke-width:2px;
+    classDef default fill:#0f172a,stroke:#334155,color:#f8fafc,stroke-width:1.5px;
 ```
 
 Flow summary: the user speaks to the client → media streams via LiveKit Cloud to `apps/agent` → the agent processes it with Gemini Live; work tasks are delegated through `omp-bridge` to oh-my-pi workers (production uses a mock worker for fast execution with zero Hermes dependency), results land in the task store; the Hermes orchestrator pushes/claims tasks over WS. All production components bind `127.0.0.1` — public access goes exclusively through Nginx/domain.
