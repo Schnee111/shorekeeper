@@ -137,6 +137,9 @@ importers:
 
   packages/omp-bridge:
     dependencies:
+      event-bus:
+        specifier: workspace:*
+        version: link:../event-bus
       handoff-contract:
         specifier: workspace:*
         version: link:../contracts

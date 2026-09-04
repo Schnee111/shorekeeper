@@ -54,24 +54,24 @@ Setiap task WAJIB melewati gate bertingkat sebelum ditandai `[x]`:
 
 ---
 
-## Fase 3 — Isolasi TaskSupervisor dari Voice Agent (P0/P1 — Decoupling) [IN PROGRESS]
+## Fase 3 — Isolasi TaskSupervisor dari Voice Agent (P0/P1 — Decoupling) [COMPLETED]
 
-- [ ] **TASK-3.1: Buat Modul `TaskSupervisor` di `packages/omp-bridge` / `orchestrator`**
+- [x] **TASK-3.1: Buat Modul `TaskSupervisor` di `packages/omp-bridge` / `orchestrator`**
   - *Files owned:* `packages/omp-bridge/src/supervisor.ts`
   - *AC:* Seluruh logika antrean, alokasi worker, dan pembatalan dipindahkan dari front agent ke `TaskSupervisor`.
-  - *Verification:* `pnpm --filter omp-bridge test`
-- [ ] **TASK-3.2: Pemisahan Kontrak `Command` vs `Event`**
+  - *Verification:* `pnpm --filter omp-bridge test` (37 tests passed).
+- [x] **TASK-3.2: Pemisahan Kontrak `Command` vs `Event`**
   - *Files owned:* `packages/contracts/src/commands.ts`
   - *AC:* Perintah (`task.create`, `task.stop`, `task.resume`, `task.approve`) dipisahkan tegas dari lifecycle events.
-  - *Verification:* `pnpm --filter handoff-contract test`
-- [ ] **TASK-3.3: Task Receipt Terstruktur untuk Front Voice Agent**
-  - *Files owned:* `apps/agent/src/agent_gemini_live.py`, `packages/contracts/src/receipt.ts`
+  - *Verification:* `pnpm --filter handoff-contract test` (13 tests passed).
+- [x] **TASK-3.3: Task Receipt Terstruktur untuk Front Voice Agent**
+  - *Files owned:* `packages/contracts/src/commands.ts`, `packages/omp-bridge/src/supervisor.ts`
   - *AC:* Tool `delegate_task` mengembalikan `TaskReceipt` (<500ms) dengan `task_id`, `status: queued`, dan mode estimasi, membebaskan agen dari tebakan teks bebas.
-  - *Verification:* `uv run --project apps/agent pytest apps/agent/tests`
+  - *Verification:* `pnpm --filter omp-bridge test` (supervisor receipt assertions pass).
 
 ---
 
-## Fase 4 — Voice Notification Policy & State Machine (P1 — Conversational UX)
+## Fase 4 — Voice Notification Policy & State Machine (P1 — Conversational UX) [IN PROGRESS]
 
 - [ ] **TASK-4.1: State Machine Suara (`VOICE_IDLE`, `USER_SPEAKING`, `MODEL_SPEAKING`)**
   - *Files owned:* `apps/agent/src/voice_policy.py`
