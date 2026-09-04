@@ -286,11 +286,19 @@ export class WorkerManager {
     }
   }
 
-  /** Strategi restart: manager baru boleh langsung recoverStale lagi (idempotent). */
+  /** Strategi restart & reconciliation (Fase 7 / P1): tandai gantung sebagai unknown untuk audit/reconcile aman */
   async recoverStale(): Promise<string[]> {
     const stale = this.opts.store.staleTasks(this.opts.staleTtlSeconds);
     for (const rec of stale) {
-      this.opts.onEvent({ type: "recovered-stale", taskId: rec.task_id, error: rec.error ?? "STALE_HEARTBEAT" });
+      // Transition to 'unknown' to fence ambiguous crash outcomes
+      try {
+        this.opts.store.transition(rec.task_id, "unknown", {
+          error: "CRASH_RECONCILED: task gantung saat restart / heartbeat basi",
+        });
+      } catch {
+        /* sudah terminal */
+      }
+      this.opts.onEvent({ type: "recovered-stale", taskId: rec.task_id, error: "CRASH_RECONCILED" });
     }
     return stale.map((r) => r.task_id);
   }

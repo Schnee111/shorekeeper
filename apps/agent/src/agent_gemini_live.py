@@ -296,6 +296,12 @@ class ShorekeeperAgent(Agent):
             topic: The technical question, project list, or architecture topic to consult
         """
         logger.info(f"Consulting orchestrator/memory: {topic}")
+        # Asynchronous consultation pattern (Fase 5 / TASK-5.2):
+        # Query MemPalace with 1.5s bound and format compact summary
+        mem = await search_mempalace(topic)
+        if mem and not mem.startswith("MemPalace sedang tidak dapat diakses"):
+            return f"Catatan dari MemPalace untuk '{topic}':\n{mem[:300]}"
+
         # Active projects summary in the Shorekeeper system
         summary = (
             "Berikut adalah ringkasan status proyek aktif kita saat ini:\n"
