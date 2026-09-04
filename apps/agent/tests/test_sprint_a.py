@@ -5,6 +5,7 @@ Tidak ada network call nyata.
 """
 
 import asyncio
+import json
 from unittest.mock import patch
 
 import pytest
@@ -31,11 +32,14 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, response):
-        self._response = response
+    def __init__(self, resp):
+        self._resp = resp
 
     def get(self, url, **kwargs):
-        return self._response
+        return self._resp
+
+    def post(self, url, **kwargs):
+        return self._resp
 
     async def __aenter__(self):
         return self
@@ -53,6 +57,9 @@ class RaisingSession:
     def get(self, url, **kwargs):
         raise self._exc
 
+    def post(self, url, **kwargs):
+        raise self._exc
+
     async def __aenter__(self):
         return self
 
@@ -64,9 +71,10 @@ class RaisingSession:
 async def test_memory_search_success(monkeypatch):
     monkeypatch.setenv("MEMPALACE_MCP_HTTP_ENDPOINT", "http://fake:9999")
     monkeypatch.setenv("MEMPALACE_MCP_HTTP_TOKEN", "tok")
-    payload = {"results": [{"title": "ADR-002", "content": "transport decision", "wing": "decisions"}]}
+    inner_payload = {"results": [{"wing": "decisions", "room": "arch", "text": "ADR-002 transport decision", "similarity": 0.9}]}
+    payload = {"jsonrpc": "2.0", "id": 1, "result": {"content": [{"type": "text", "text": json.dumps(inner_payload)}]}}
     resp = FakeResponse(200, payload)
-    with patch.object(agl.aiohttp, "ClientSession", return_value=FakeSession(resp)):
+    with patch("mempalace_client.aiohttp.ClientSession", return_value=FakeSession(resp)):
         out = await agl.search_mempalace("keputusan transport")
     assert "ADR-002" in out
     assert "decisions" in out
@@ -101,9 +109,10 @@ async def test_build_session_context_mempalace_success(monkeypatch, tmp_path):
     monkeypatch.setattr(agl, "DB_PATH", str(tmp_path / "tasks.db"))
     monkeypatch.setenv("MEMPALACE_MCP_HTTP_ENDPOINT", "http://fake:9999")
     monkeypatch.setenv("MEMPALACE_MCP_HTTP_TOKEN", "tok")
-    payload = {"results": [{"content": "Schnee suka ringkas"}]}
+    inner_payload = {"results": [{"wing": "prefs", "room": "style", "text": "Schnee suka ringkas", "similarity": 0.9}]}
+    payload = {"jsonrpc": "2.0", "id": 1, "result": {"content": [{"type": "text", "text": json.dumps(inner_payload)}]}}
     resp = FakeResponse(200, payload)
-    with patch.object(agl.aiohttp, "ClientSession", return_value=FakeSession(resp)):
+    with patch("mempalace_client.aiohttp.ClientSession", return_value=FakeSession(resp)):
         out = await agl.build_session_context("room-1")
     assert "[KONTEKS SAAT INI]" in out
 
