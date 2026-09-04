@@ -28,12 +28,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..", "..", "..");
 const DB_PATH = process.env.SHOREKEEPER_DB || join(ROOT, "data", "tasks.db");
 const HERMES_WS_URL = process.env.HERMES_WS_URL || "ws://127.0.0.1:9119/api/ws";
+const HERMES_WS_TOKEN = process.env.HERMES_WS_TOKEN || process.env.HERMES_DASHBOARD_SESSION_TOKEN || "";
 const MAX_PARALLEL = Math.min(3, Number(process.env.SK_MAX_PARALLEL ?? 2));
 const POLL_MS = 500;
 const HEARTBEAT_MS = 15_000;
 const TASK_TIMEOUT_MS = Number(process.env.SK_TASK_TIMEOUT ?? 900_000);
 const STALE_TTL_SECONDS = 75;
 const MOCK = process.env.OMP_BRIDGE_MOCK === "1";
+
+function buildWsUrl(): string {
+  if (!HERMES_WS_TOKEN) return HERMES_WS_URL;
+  const separator = HERMES_WS_URL.includes("?") ? "&" : "?";
+  return `${HERMES_WS_URL}${separator}token=${encodeURIComponent(HERMES_WS_TOKEN)}`;
+}
 
 function log(msg: string): void {
   console.log(`[daemon][${new Date().toISOString().slice(11, 19)}] ${msg}`);
@@ -56,7 +63,8 @@ interface HermesResult {
 }
 
 async function executeViaHermes(instruction: string): Promise<HermesResult> {
-  const ws = new WebSocket(HERMES_WS_URL);
+  const wsUrl = buildWsUrl();
+  const ws = new WebSocket(wsUrl);
   let msgId = 0;
   const pending = new Map<number, (data: Record<string, unknown>) => void>();
   let collected = "";
@@ -118,7 +126,7 @@ async function executeViaHermes(instruction: string): Promise<HermesResult> {
       res(true);
     };
   });
-  if (!opened) return { ok: false, summary: `Hermes gateway tidak reachable di ${HERMES_WS_URL}` };
+  if (!opened) return { ok: false, summary: `Hermes gateway tidak reachable di ${buildWsUrl().replace(/token=[^&]+/, "token=***")}` };
 
   const created = await rpc("session.create", {});
   if (created.error) return { ok: false, summary: `session.create gagal: ${JSON.stringify(created.error).slice(0, 200)}` };
