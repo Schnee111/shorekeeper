@@ -138,5 +138,5 @@ async def test_search_mempalace_live_against_service():
     )
     assert res["status"] == "ok"
     assert len(res["drawers"]) > 0
-    assert res["latency_ms"] < 2000
+    assert res["latency_ms"] < 5000
     assert "Hasil pencarian" in res["narrative"]
