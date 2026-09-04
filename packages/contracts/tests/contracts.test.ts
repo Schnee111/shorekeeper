@@ -92,8 +92,12 @@ describe("state machine", () => {
     expect(canTransition("queued", "running")).toBe(true);
     expect(canTransition("running", "done")).toBe(true);
     expect(canTransition("running", "blocked")).toBe(true);
+    expect(canTransition("running", "waiting_input")).toBe(true);
+    expect(canTransition("running", "unknown")).toBe(true);
+    expect(canTransition("waiting_input", "running")).toBe(true);
     expect(canTransition("blocked", "running")).toBe(true);
     expect(canTransition("running", "failed")).toBe(true);
+    expect(canTransition("unknown", "running")).toBe(true);
   });
 
   it("transisi illegal ditolak", () => {

@@ -45,17 +45,21 @@ export const TaskStatus = z.enum([
   "failed",
   "cancelled",
   "blocked",
+  "waiting_input",
+  "unknown",
 ]);
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
 export const LANES = ["research", "frontend", "debug", "qa"] as const;
 export const LaneSchema = z.enum(LANES);
 
-/** State machine: queued -> running -> done|failed|cancelled ; running -> blocked */
+/** State machine: transitions per ADR and Gap Analysis (P1) */
 export const TASK_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   queued: ["running", "cancelled"],
-  running: ["done", "failed", "cancelled", "blocked"],
+  running: ["done", "failed", "cancelled", "blocked", "waiting_input", "unknown"],
   blocked: ["running", "cancelled", "failed"],
+  waiting_input: ["running", "cancelled", "failed"],
+  unknown: ["running", "done", "failed", "cancelled"],
   done: [],
   failed: [],
   cancelled: [],
@@ -72,6 +76,7 @@ export const TaskRecordSchema = z.object({
   session_room: z.string().default(""),
   user_intent: z.string().default(""),
   parent_id: z.string().nullable().default(null),
+  root_task_id: z.string().nullable().default(null),
   lane: LaneSchema.default("debug"),
   status: TaskStatus.default("queued"),
   worker_pid: z.number().int().nullable().default(null),

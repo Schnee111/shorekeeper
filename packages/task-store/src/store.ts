@@ -27,7 +27,16 @@ export const STORE_VERSION = "0.1.0";
 export const DEFAULT_DB_PATH = "data/tasks.db";
 export const MAX_ARTIFACT_INLINE_BYTES = 1024;
 
-const STATUSES: TaskStatus[] = ["queued", "running", "done", "failed", "cancelled", "blocked"];
+const STATUSES: TaskStatus[] = [
+  "queued",
+  "running",
+  "done",
+  "failed",
+  "cancelled",
+  "blocked",
+  "waiting_input",
+  "unknown",
+];
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -35,10 +44,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   session_room  TEXT NOT NULL DEFAULT '',
   user_intent   TEXT NOT NULL DEFAULT '',
   parent_id     TEXT,
+  root_task_id  TEXT,
   lane          TEXT NOT NULL DEFAULT 'debug'
                 CHECK (lane IN ('research','frontend','debug','qa')),
   status        TEXT NOT NULL DEFAULT 'queued'
-                CHECK (status IN ('queued','running','done','failed','cancelled','blocked')),
+                CHECK (status IN ('queued','running','done','failed','cancelled','blocked','waiting_input','unknown')),
   worker_pid    INTEGER,
   heartbeat_ts  INTEGER,
   created_at    INTEGER NOT NULL,
@@ -200,6 +210,7 @@ export class TaskStore {
       session_room: input.session_room ?? "",
       user_intent: input.user_intent ?? "",
       parent_id: input.parent_id ?? null,
+      root_task_id: input.root_task_id ?? (input.parent_id ?? input.task_id),
       lane: input.lane ?? "debug",
       status: input.status ?? "queued",
       worker_pid: input.worker_pid ?? null,
@@ -218,16 +229,17 @@ export class TaskStore {
       this.db
         .prepare(
           `INSERT INTO tasks
-           (task_id, session_room, user_intent, parent_id, lane, status, worker_pid,
+           (task_id, session_room, user_intent, parent_id, root_task_id, lane, status, worker_pid,
             heartbeat_ts, created_at, started_at, finished_at, contract_ref,
             artifact_dir, summary, error, notify_gate, priority)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         )
         .run(
           record.task_id,
           record.session_room,
           record.user_intent,
           record.parent_id,
+          record.root_task_id,
           record.lane,
           record.status,
           record.worker_pid,
@@ -338,6 +350,8 @@ export class TaskStore {
       failed: "task.failed",
       cancelled: "task.cancelled",
       blocked: "task.waiting_input",
+      waiting_input: "task.waiting_input",
+      unknown: "task.unknown",
     };
 
     // Emit event to outbox atomically
@@ -409,6 +423,8 @@ export class TaskStore {
     failed: "gagal",
     cancelled: "dibatalkan",
     blocked: "terblokir (menunggu dependency)",
+    waiting_input: "menunggu input pengguna",
+    unknown: "status tidak diketahui (memerlukan investigasi)",
   };
 
   /**

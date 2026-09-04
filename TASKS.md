@@ -33,28 +33,28 @@ Setiap task WAJIB melewati gate bertingkat sebelum ditandai `[x]`:
 
 ---
 
-## Fase 2 — State Machine & Task Lineage (P1 — Integrity) [IN PROGRESS]
+## Fase 2 — State Machine & Task Lineage (P1 — Integrity) [COMPLETED]
 
-- [ ] **TASK-2.1: Formalisasi State `waiting_input` & `unknown` di `packages/contracts`**
-  - *Files owned:* `packages/contracts/src/schema.ts`, `packages/contracts/src/transitions.ts`
+- [x] **TASK-2.1: Formalisasi State `waiting_input` & `unknown` di `packages/contracts`**
+  - *Files owned:* `packages/contracts/src/contracts.ts`
   - *AC:* Schema `TaskRecordSchema` & `TaskStatus` mencakup `waiting_input` (subagent interaktif) dan `unknown` (fail-closed worker crash). Transisi yang valid didefinisikan ketat.
-  - *Verification:* `pnpm --filter handoff-contract test`
-- [ ] **TASK-2.2: Tambah Field Task Lineage (`rootTaskId`, `parentTaskId`)**
-  - *Files owned:* `packages/contracts/src/schema.ts`, `packages/task-store/src/store.ts`
+  - *Verification:* `pnpm --filter handoff-contract test` (13 tests passed).
+- [x] **TASK-2.2: Tambah Field Task Lineage (`rootTaskId`, `parentTaskId`)**
+  - *Files owned:* `packages/contracts/src/contracts.ts`, `packages/task-store/src/store.ts`
   - *AC:* Setiap task menyimpan silsilah follow-up (`parentTaskId`, `rootTaskId`). Query follow-up mengembalikan pohon silsilah tanpa menduplikasi log lama.
-  - *Verification:* `pnpm --filter handoff-contract test && pnpm --filter task-store test`
-- [ ] **TASK-2.3: Sub-State Merge Pipeline di `packages/merge-orchestrator`**
+  - *Verification:* `pnpm --filter handoff-contract test && pnpm --filter task-store test` (passed).
+- [x] **TASK-2.3: Sub-State Merge Pipeline di `packages/merge-orchestrator`**
   - *Files owned:* `packages/merge-orchestrator/src/orchestrator.ts`
   - *AC:* State transisi merge menjadi terstruktur: `verifying` → `merge_queued` → `merging` → `merged` (atau `verification_failed` / `conflict`).
-  - *Verification:* `pnpm --filter merge-orchestrator test`
-- [ ] **TASK-2.4: Update SQLite Table Migration & Tests**
+  - *Verification:* `pnpm --filter merge-orchestrator test` (6 tests passed).
+- [x] **TASK-2.4: Update SQLite Table Migration & Tests**
   - *Files owned:* `packages/task-store/src/store.ts`, `packages/task-store/tests/*`
   - *AC:* Kolom baru `root_task_id` ditambahkan ke tabel `tasks`. Test state machine dan lineage lolos.
-  - *Verification:* `pnpm --filter task-store test && pnpm -r test`
+  - *Verification:* `pnpm --filter task-store test && pnpm -r test` (91 passed).
 
 ---
 
-## Fase 3 — Isolasi TaskSupervisor dari Voice Agent (P0/P1 — Decoupling)
+## Fase 3 — Isolasi TaskSupervisor dari Voice Agent (P0/P1 — Decoupling) [IN PROGRESS]
 
 - [ ] **TASK-3.1: Buat Modul `TaskSupervisor` di `packages/omp-bridge` / `orchestrator`**
   - *Files owned:* `packages/omp-bridge/src/supervisor.ts`
