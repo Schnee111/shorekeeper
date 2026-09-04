@@ -21,6 +21,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TaskStore } from "task-store";
 import { applyMockFix } from "./mock-worker.js";
+import { clipSummary, buildWsUrl, type HermesResult } from "./daemon-utils.js";
 
 // Repo root = 3 level di atas file ini (packages/omp-bridge/dist/daemon.js).
 // Jangan pakai process.cwd() — daemon bisa dijalankan dari mana saja (systemd, dev).
@@ -36,34 +37,12 @@ const TASK_TIMEOUT_MS = Number(process.env.SK_TASK_TIMEOUT ?? 900_000);
 const STALE_TTL_SECONDS = 75;
 const MOCK = process.env.OMP_BRIDGE_MOCK === "1";
 
-function buildWsUrl(): string {
-  if (!HERMES_WS_TOKEN) return HERMES_WS_URL;
-  const separator = HERMES_WS_URL.includes("?") ? "&" : "?";
-  return `${HERMES_WS_URL}${separator}token=${encodeURIComponent(HERMES_WS_TOKEN)}`;
-}
-
 function log(msg: string): void {
   console.log(`[daemon][${new Date().toISOString().slice(11, 19)}] ${msg}`);
 }
 
-/** Potong summary ke ≤ 190 kata (limit store: 200 kata). */
-function clipSummary(text: string): string {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= 190) return words.join(" ") || "(tanpa ringkasan)";
-  return words.slice(0, 190).join(" ") + "…";
-}
-
-// ---------------------------------------------------------------------------
-// Hermes WS executor — satu koneksi per task (aman paralel, gateway lokal)
-// ---------------------------------------------------------------------------
-
-interface HermesResult {
-  ok: boolean;
-  summary: string;
-}
-
 async function executeViaHermes(instruction: string): Promise<HermesResult> {
-  const wsUrl = buildWsUrl();
+  const wsUrl = buildWsUrl(HERMES_WS_URL, HERMES_WS_TOKEN);
   const ws = new WebSocket(wsUrl);
   let msgId = 0;
   const pending = new Map<number, (data: Record<string, unknown>) => void>();
@@ -101,8 +80,11 @@ async function executeViaHermes(instruction: string): Promise<HermesResult> {
     if (type === "message.delta" && typeof payload.text === "string") {
       collected += payload.text;
       lastDeltaAt = Date.now();
-    } else if (type === "message.complete" || type === "turn.end") {
-      finish({ ok: true, summary: collected });
+    } else if (type === "message.complete" || type === "turn.end" || type === "turn.complete") {
+      const finalText = typeof payload.text === "string" && payload.text.trim().length > 0
+        ? payload.text
+        : collected;
+      finish({ ok: true, summary: finalText });
     } else if (type === "session.error" || type === "error") {
       finish({ ok: false, summary: String(payload.message ?? payload.error ?? "hermes error") });
     }
@@ -126,7 +108,7 @@ async function executeViaHermes(instruction: string): Promise<HermesResult> {
       res(true);
     };
   });
-  if (!opened) return { ok: false, summary: `Hermes gateway tidak reachable di ${buildWsUrl().replace(/token=[^&]+/, "token=***")}` };
+  if (!opened) return { ok: false, summary: `Hermes gateway tidak reachable di ${buildWsUrl(HERMES_WS_URL, HERMES_WS_TOKEN).replace(/token=[^&]+/, "token=***")}` };
 
   const created = await rpc("session.create", {});
   if (created.error) return { ok: false, summary: `session.create gagal: ${JSON.stringify(created.error).slice(0, 200)}` };
