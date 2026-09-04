@@ -147,7 +147,8 @@ SHOREKEEPER_INSTRUCTIONS = textwrap.dedent(
 )
 
 server = AgentServer(
-    num_idle_processes=0,
+    # Eliminate 5.28s cold start while respecting VPS 3.6GB RAM guard (Issue #8)
+    num_idle_processes=int(os.getenv("SHOREKEEPER_NUM_IDLE_PROCESSES", "1")),
     job_memory_limit_mb=600,
     load_threshold=0.95,
     multiprocessing_context="spawn",
