@@ -149,9 +149,15 @@ export async function startLivekitVoice(opts: LivekitVoiceOptions): Promise<Live
     // Autoplay unlock — we are inside the orb-tap gesture.
     await room.startAudio();
 
-    // Mic on: WebRTC capture replaces the old getUserMedia pipeline.
+    // Mic on: WebRTC capture with standard audio constraints (echoCancellation, noiseSuppression, sampleRate 48kHz)
     const local = room.localParticipant as LocalParticipant;
-    await local.setMicrophoneEnabled(true);
+    await local.setMicrophoneEnabled(true, {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      sampleRate: 48000,
+      channelCount: 1,
+    });
     opts.onLog('Microphone enabled');
 
     // Connect user mic MediaStream to AudioAnalyser for 3D Spectro Particle Visualizer
