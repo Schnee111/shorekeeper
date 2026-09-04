@@ -11,7 +11,7 @@ ExecStart=/home/ubuntu/.local/bin/uv run --project /home/ubuntu/projects/shoreke
 Restart=always
 RestartSec=5
 MemoryMax=800M
-TasksMax=50
+TasksMax=250
 
 [Install]
 WantedBy=multi-user.target

@@ -98,9 +98,9 @@ Setiap task WAJIB melewati gate bertingkat sebelum ditandai `[x]`:
   - *Files owned:* `apps/agent/src/agent_gemini_live.py`
   - *AC:* Log worker dan riwayat task tidak memenuhi context window Gemini Live. Hanya ringkasan task aktif yang diinjeksi.
   - *Verification:* Invariant context inspection pass.
-- [x] **TASK-5.2: Asynchronous `consult()` Tool dengan Verbal Fast-Ack**
-  - *Files owned:* `apps/agent/src/agent_gemini_live.py`
-  - *AC:* Pertanyaan penalaran arsitektur berat langsung direspons suara awal (*"Biar kupikirkan dulu..."*) sementara Hermes/MemPalace memproses di background.
+- [x] **TASK-5.2: Asynchronous `consult()` Tool & MemPalace MCP Alignment (#2)**
+  - *Files owned:* `apps/agent/src/agent_gemini_live.py`, `apps/agent/.env.local`
+  - *AC:* Pertanyaan penalaran arsitektur berat langsung direspons suara awal sementara MemPalace memproses di background dengan token valid (menutup Issue #2).
   - *Verification:* `uv run --project apps/agent pytest apps/agent/tests` (24 passed).
 - [x] **TASK-5.3: Taksonomi Tool: Inline (<1s) vs Background**
   - *Files owned:* `apps/agent/src/agent_gemini_live.py`
@@ -145,9 +145,9 @@ Setiap task WAJIB melewati gate bertingkat sebelum ditandai `[x]`:
   - *Files owned:* `packages/observability/src/metrics.ts`
   - *AC:* Pengukuran deterministik untuk latensi voice-to-voice dan event delivery.
   - *Verification:* Observability package tests.
-- [x] **TASK-8.3: Golden Eval Cases untuk Realtime Voice UX**
-  - *Files owned:* `scripts/gates/gate-voice-production.sh`
-  - *AC:* End-to-end regression & golden eval verified.
+- [x] **TASK-8.3: Golden Eval Cases & Service Hardening (#1, #3)**
+  - *Files owned:* `scripts/gates/gate-voice-production.sh`, `deploy/systemd/*`
+  - *AC:* End-to-end regression verified, TasksMax=250 WebRTC hardening, dan OMP_BRIDGE_MOCK=0 switch (menutup Issue #1 & #3).
   - *Verification:* `bash scripts/gates/gate-voice-production.sh` (PASS — exit 0).
 
 ---

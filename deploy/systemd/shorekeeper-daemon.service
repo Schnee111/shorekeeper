@@ -7,8 +7,9 @@ Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/projects/shorekeeper
 Environment="PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="OMP_BRIDGE_MOCK=1"        # Production mode: mock executor (fast, no Hermes dependency)
-# Environment="HERMES_WS_URL=ws://127.0.0.1:9119/api/ws"   # Temporarily disabled — Hermes gateway WS not accepting connections
+Environment="OMP_BRIDGE_MOCK=0"        # Production mode: real Hermes WS executor
+Environment="HERMES_WS_URL=ws://127.0.0.1:9119/api/ws"
+Environment="HERMES_WS_TOKEN=jarvis-voice-secret-2026"
 Environment="SHOREKEEPER_DB=/home/ubuntu/projects/shorekeeper/data/tasks.db"
 Environment="SK_MAX_PARALLEL=3"
 # 15 menit per task
@@ -21,7 +22,7 @@ StandardError=journal+console
 
 # Memory safety (VPS 3.6GB RAM) — hard cap
 MemoryMax=800M
-TasksMax=20
+TasksMax=50
 
 [Install]
 WantedBy=multi-user.target
