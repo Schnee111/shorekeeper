@@ -305,33 +305,84 @@ class ShorekeeperAgent(Agent):
 
     @function_tool
     async def check_task_status(self, task_id: str | None = None) -> str:
-        """Check the status of running or recent background tasks from SQLite.
+        """Check the status of running or recent background tasks and fetch substantive findings/summaries.
 
         Args:
-            task_id: Optional ID of the task to query
+            task_id: Optional ID of the task to query (or 'latest' for the most recent task)
         """
         logger.info(f"Checking task status from SQLite: {task_id}")
         try:
+            clean_id = task_id.strip() if task_id and isinstance(task_id, str) else None
+            is_latest_query = bool(clean_id and clean_id.lower() in ("latest", "terakhir", "recent"))
+
             with sqlite3.connect(DB_PATH) as conn:
                 conn.row_factory = sqlite3.Row
-                if task_id:
+                if clean_id and not is_latest_query:
                     row = conn.execute(
-                        "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
+                        "SELECT * FROM tasks WHERE task_id = ? OR task_id = ?",
+                        (clean_id, f"task_{clean_id}"),
                     ).fetchone()
                     if not row:
                         return f"Tidak ditemukan task dengan ID {task_id}."
-                    return f"Task {row['task_id']} ({row['user_intent']}) status: {row['status']}. Summary: {row['summary'] or 'belum ada output'}."
+                elif is_latest_query:
+                    row = conn.execute(
+                        "SELECT * FROM tasks ORDER BY created_at DESC LIMIT 1"
+                    ).fetchone()
+                    if not row:
+                        return "Belum ada task di background saat ini."
+                else:
+                    row = None
+
+                if row is not None:
+                    tid = row["task_id"]
+                    intent = row["user_intent"] or tid
+                    status = row["status"]
+                    lane = row["lane"]
+                    summary = (row["summary"] or "").strip()
+                    error = (row["error"] or "").strip()
+
+                    if status == "done":
+                        if summary:
+                            return f"Task {tid} ({intent}) status: selesai.\nHasil temuan:\n{summary}"
+                        return f"Task {tid} ({intent}) status: selesai. Belum ada ringkasan temuan detail."
+                    elif status == "failed":
+                        err_msg = error or summary or "terjadi kesalahan tanpa pesan error."
+                        return f"Task {tid} ({intent}) status: gagal.\nPenyebab kegagalan: {err_msg}"
+                    elif status == "running":
+                        return f"Task {tid} ({intent}) status: sedang berjalan aktif di background (lane: {lane})."
+                    elif status in ("queued", "blocked"):
+                        return f"Task {tid} ({intent}) status: dalam antrean ({status}, lane: {lane})."
+                    else:
+                        res = f"Task {tid} ({intent}) status: {status}."
+                        if summary:
+                            res += f"\nHasil temuan:\n{summary}"
+                        return res
                 else:
                     rows = conn.execute(
-                        "SELECT task_id, user_intent, status, summary FROM tasks ORDER BY created_at DESC LIMIT 5"
+                        "SELECT task_id, user_intent, lane, status, summary, error FROM tasks ORDER BY created_at DESC LIMIT 5"
                     ).fetchall()
                     if not rows:
                         return "Belum ada task di background saat ini."
-                    items = [
-                        f"- [{r['task_id']}] {r['user_intent']} ({r['status']})"
-                        for r in rows
-                    ]
-                    return "Task terbaru di background:\n" + "\n".join(items)
+                    items = []
+                    for r in rows:
+                        tid = r["task_id"]
+                        intent = r["user_intent"] or tid
+                        status = r["status"]
+                        summary = (r["summary"] or "").strip()
+                        error = (r["error"] or "").strip()
+                        if status == "done":
+                            if summary:
+                                items.append(f"- [{tid}] {intent} (selesai): {summary}")
+                            else:
+                                items.append(f"- [{tid}] {intent} (selesai)")
+                        elif status == "failed":
+                            err_msg = error or summary or "gagal"
+                            items.append(f"- [{tid}] {intent} (gagal): {err_msg}")
+                        elif status == "running":
+                            items.append(f"- [{tid}] {intent} (sedang berjalan)")
+                        else:
+                            items.append(f"- [{tid}] {intent} ({status})")
+                    return "Daftar task terbaru di background dengan hasil temuan:\n" + "\n".join(items)
         except Exception as e:
             logger.exception("Failed to query tasks")
             return f"Gagal memeriksa status task: {e}"
