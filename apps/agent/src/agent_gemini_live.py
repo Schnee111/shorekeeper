@@ -26,6 +26,8 @@ from livekit.agents import (
 )
 from livekit.plugins.google.realtime import RealtimeModel
 
+from mempalace_client import search_mempalace_mcp
+
 logger = logging.getLogger("shorekeeper-agent")
 
 # Suppress spurious SDK internal warnings from google_genai:
@@ -182,52 +184,14 @@ VALID_GEMINI_VOICES = {
 
 
 async def search_mempalace(query: str, timeout: float = 1.5) -> str:
-    """Core logic Sprint A.3: query MemPalace MCP HTTP, return top-k ringkas.
+    """Core logic Sprint A.3: query MemPalace MCP HTTP (JSON-RPC 2.0 tools/call), return top-k ringkas.
 
     Timeout default 1.5s. Jika down → return narasi natural (BUKAN error mentah).
     Dipisah dari @function_tool agar bisa di-unit-test tanpa LiveKit tool machinery.
     """
     logger.info(f"Searching MemPalace: {query}")
-    try:
-        # Get MCP endpoint from environment (set by user/config)
-        mcp_endpoint = os.getenv("MEMPALACE_MCP_HTTP_ENDPOINT", "")
-        mcp_token = os.getenv("MEMPALACE_MCP_HTTP_TOKEN", "")
-
-        if not mcp_endpoint or not mcp_token:
-            return "Aku sedang kesulitan mengakses memori jangka panjangku — konfigurasi MCP belum tersedia."
-
-        async with aiohttp.ClientSession() as session:
-            url = f"{mcp_endpoint}/search"
-            headers = {"Authorization": f"Bearer {mcp_token}"}
-            params = {"query": query, "limit": 3}
-
-            async with session.get(
-                url,
-                headers=headers,
-                params=params,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    results = data.get("results", [])
-                    if not results:
-                        return f"Tidak ditemukan ingatan terkait '{query}' dalam memoriku."
-
-                    items = []
-                    for r in results[:3]:
-                        title = r.get("title", "tanpa judul")
-                        preview = r.get("content", "")[:150]
-                        wing = r.get("wing", "unknown")
-                        items.append(f"- {title} ({wing}): {preview}...")
-
-                    return f"Hasil pencarian ingatan untuk '{query}':\n" + "\n".join(items)
-                return "Aku sedang kesulitan mengakses ingatanku, coba lagi sebentar lagi."
-    except asyncio.TimeoutError:
-        logger.warning(f"MemPalace search timeout: {query}")
-        return "Aku sedang kesulitan mengakses ingatanku, coba lagi sebentar lagi."
-    except Exception as e:
-        logger.warning(f"MemPalace search failed: {e}")
-        return "Aku sedang kesulitan mengakses ingatanku, coba lagi sebentar lagi."
+    res = await search_mempalace_mcp(query=query, limit=3, timeout=timeout)
+    return res.get("narrative", f"Tidak ditemukan ingatan terkait '{query}' dalam memoriku.")
 
 
 class ShorekeeperAgent(Agent):
@@ -376,33 +340,12 @@ class ShorekeeperAgent(Agent):
 async def build_session_context(room_name: str) -> str:
     parts: list[str] = []
 
-    # 1. MemPalace preferences + active projects
-    mcp_endpoint = os.getenv("MEMPALACE_MCP_HTTP_ENDPOINT", "")
-    mcp_token = os.getenv("MEMPALACE_MCP_HTTP_TOKEN", "")
-    if mcp_endpoint and mcp_token:
-        try:
-            async with aiohttp.ClientSession() as session:
-                headers = {"Authorization": f"Bearer {mcp_token}"}
-                for query, label in [
-                    ("preferensi user", "Preferensi"),
-                    ("proyek aktif", "Proyek Aktif"),
-                ]:
-                    async with session.get(
-                        f"{mcp_endpoint}/search",
-                        headers=headers,
-                        params={"query": query, "limit": 2},
-                        timeout=aiohttp.ClientTimeout(total=1.5),
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            results = data.get("results", [])[:2]
-                            if results:
-                                lines = [r.get("content", "")[:120] for r in results]
-                                parts.append(f"{label}: {' | '.join(lines)}")
-        except Exception as e:
-            logger.warning(f"MemPalace context fetch failed: {e}")
-    else:
-        logger.warning("MemPalace MCP endpoint/token not set — skipping context injection")
+    # 1. MemPalace preferences + active projects via JSON-RPC 2.0
+    for q, label in [("preferensi user", "Preferensi"), ("proyek aktif", "Proyek Aktif")]:
+        res = await search_mempalace_mcp(query=q, limit=2, timeout=1.5)
+        if res.get("status") == "ok" and res.get("drawers"):
+            lines = [d.get("snippet", "") for d in res.get("drawers", [])]
+            parts.append(f"{label}: {' | '.join(lines)}")
 
     # 2. SQLite: 5 task terakhir
     try:
