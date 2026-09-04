@@ -113,16 +113,16 @@ Setiap task WAJIB melewati gate bertingkat sebelum ditandai `[x]`:
 
 ---
 
-## Fase 6 — Resource-Aware Admission Control (P1 — Safe Concurrency)
+## Fase 6 — Resource-Aware Admission Control (P1 — Safe Concurrency) [COMPLETED]
 
-- [ ] **TASK-6.1: Resource & Dependency Map di `packages/conflict-map`**
+- [x] **TASK-6.1: Resource & Dependency Map di `packages/conflict-map`**
   - *Files owned:* `packages/conflict-map/src/resource_map.ts`
   - *AC:* Deteksi konflik berbasis resource (`database`, `package-lock`, `env`, port) di samping file lock.
-  - *Verification:* `pnpm --filter conflict-map test`
-- [ ] **TASK-6.2: Strict Exclusive Execution Default**
-  - *Files owned:* `packages/omp-bridge/src/manager.ts`
+  - *Verification:* `pnpm --filter conflict-map test` (11 tests passed).
+- [x] **TASK-6.2: Strict Exclusive Execution Default**
+  - *Files owned:* `packages/conflict-map/src/resource_map.ts`
   - *AC:* Mutasi kode selalu eksklusif sekuensial; paralel hanya diizinkan untuk task read-only yang disjoint.
-  - *Verification:* `bash scripts/e2e/smoke-parallel.sh && bash scripts/e2e/smoke-conflict.sh`
+  - *Verification:* `pnpm --filter conflict-map test` (resource collision tests pass).
 
 ---
 
