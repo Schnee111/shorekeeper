@@ -186,10 +186,10 @@ VALID_GEMINI_VOICES = {
 }
 
 
-async def search_mempalace(query: str, timeout: float = 1.5) -> str:
+async def search_mempalace(query: str, timeout: float = 3.5) -> str:
     """Core logic Sprint A.3: query MemPalace MCP HTTP (JSON-RPC 2.0 tools/call), return top-k ringkas.
 
-    Timeout default 1.5s. Jika down → return narasi natural (BUKAN error mentah).
+    Timeout default 3.5s. Jika down → return narasi natural (BUKAN error mentah).
     Dipisah dari @function_tool agar bisa di-unit-test tanpa LiveKit tool machinery.
     """
     logger.info(f"Searching MemPalace: {query}")
