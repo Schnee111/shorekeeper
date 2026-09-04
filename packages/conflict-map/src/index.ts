@@ -9,3 +9,4 @@
  */
 export * from "./merge-tree.js";
 export * from "./ownership.js";
+export * from "./resource_map.js";

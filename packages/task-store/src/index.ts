@@ -11,3 +11,4 @@ export type {
   CheckTaskStatusResult,
   NotifyOutboxEntry,
 } from "./store.js";
+export { TypedEventBus, type TaskEvent, type TaskEventType } from "event-bus";

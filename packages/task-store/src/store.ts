@@ -21,12 +21,22 @@ import {
   type TaskRecord,
   type TaskStatus,
 } from "handoff-contract";
+import { TypedEventBus, type TaskEvent, type TaskEventType } from "event-bus";
 
 export const STORE_VERSION = "0.1.0";
 export const DEFAULT_DB_PATH = "data/tasks.db";
 export const MAX_ARTIFACT_INLINE_BYTES = 1024;
 
-const STATUSES: TaskStatus[] = ["queued", "running", "done", "failed", "cancelled", "blocked"];
+const STATUSES: TaskStatus[] = [
+  "queued",
+  "running",
+  "done",
+  "failed",
+  "cancelled",
+  "blocked",
+  "waiting_input",
+  "unknown",
+];
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -34,10 +44,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   session_room  TEXT NOT NULL DEFAULT '',
   user_intent   TEXT NOT NULL DEFAULT '',
   parent_id     TEXT,
+  root_task_id  TEXT,
   lane          TEXT NOT NULL DEFAULT 'debug'
                 CHECK (lane IN ('research','frontend','debug','qa')),
   status        TEXT NOT NULL DEFAULT 'queued'
-                CHECK (status IN ('queued','running','done','failed','cancelled','blocked')),
+                CHECK (status IN ('queued','running','done','failed','cancelled','blocked','waiting_input','unknown')),
   worker_pid    INTEGER,
   heartbeat_ts  INTEGER,
   created_at    INTEGER NOT NULL,
@@ -52,6 +63,20 @@ CREATE TABLE IF NOT EXISTS tasks (
   priority      INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+
+-- Outbox event stream (P0-1): transaksi atomic menulis state + event outbox.
+CREATE TABLE IF NOT EXISTS task_outbox (
+  event_id      TEXT PRIMARY KEY,
+  task_id       TEXT NOT NULL,
+  event_type    TEXT NOT NULL,
+  sequence      INTEGER NOT NULL,
+  payload       TEXT NOT NULL DEFAULT '{}',
+  created_at    INTEGER NOT NULL,
+  published     INTEGER NOT NULL DEFAULT 0,
+  published_at  INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_task_outbox_pending ON task_outbox(published, sequence);
+
 -- Outbox notifikasi (TASK-3.2 disconnect): hasil task terminal masuk sini saat
 -- "client" bisa saja hilang; reconnect → drainNotify() mengembalikan yang belum
 -- ter-deliver tepat sekali (flag delivered — at-least-once + dedupe per task_id).
@@ -85,6 +110,8 @@ export interface TaskStoreOptions {
   dbPath?: string;
   /** Sumber epoch ms — injectable untuk fake timer (test stale detection). */
   now?: () => number;
+  /** Opsional TypedEventBus untuk dispatch realtime otomatis saat commit outbox. */
+  eventBus?: TypedEventBus;
 }
 
 export interface TransitionMeta {
@@ -127,10 +154,13 @@ function rowToRecord(row: unknown): TaskRecord {
 export class TaskStore {
   private db: Database.Database;
   private nowMs: () => number;
+  private eventBus?: TypedEventBus;
+  private sequenceCounters: Map<string, number> = new Map();
 
   constructor(opts: TaskStoreOptions = {}) {
     const dbPath = opts.dbPath ?? DEFAULT_DB_PATH;
     this.nowMs = opts.now ?? (() => Date.now());
+    this.eventBus = opts.eventBus;
     if (dbPath !== ":memory:") {
       mkdirSync(dirname(resolve(dbPath)), { recursive: true });
     }
@@ -180,6 +210,7 @@ export class TaskStore {
       session_room: input.session_room ?? "",
       user_intent: input.user_intent ?? "",
       parent_id: input.parent_id ?? null,
+      root_task_id: input.root_task_id ?? (input.parent_id ?? input.task_id),
       lane: input.lane ?? "debug",
       status: input.status ?? "queued",
       worker_pid: input.worker_pid ?? null,
@@ -198,16 +229,17 @@ export class TaskStore {
       this.db
         .prepare(
           `INSERT INTO tasks
-           (task_id, session_room, user_intent, parent_id, lane, status, worker_pid,
+           (task_id, session_room, user_intent, parent_id, root_task_id, lane, status, worker_pid,
             heartbeat_ts, created_at, started_at, finished_at, contract_ref,
             artifact_dir, summary, error, notify_gate, priority)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         )
         .run(
           record.task_id,
           record.session_room,
           record.user_intent,
           record.parent_id,
+          record.root_task_id,
           record.lane,
           record.status,
           record.worker_pid,
@@ -232,6 +264,14 @@ export class TaskStore {
       }
       throw err;
     }
+
+    // Record initial event to outbox atomically
+    this.recordOutboxEvent(record.task_id, "task.accepted", {
+      lane: record.lane,
+      user_intent: record.user_intent,
+      status: record.status,
+    });
+
     return this.getTaskOrThrow(record.task_id);
   }
 
@@ -302,6 +342,27 @@ export class TaskStore {
         candidate.error,
         candidate.task_id,
       );
+    // Map task status to TaskEventType
+    const statusToEventType: Record<TaskStatus, TaskEventType> = {
+      queued: "task.queued",
+      running: "task.started",
+      done: "task.completed",
+      failed: "task.failed",
+      cancelled: "task.cancelled",
+      blocked: "task.waiting_input",
+      waiting_input: "task.waiting_input",
+      unknown: "task.unknown",
+    };
+
+    // Emit event to outbox atomically
+    this.recordOutboxEvent(candidate.task_id, statusToEventType[to], {
+      status: candidate.status,
+      summary: candidate.summary,
+      error: candidate.error,
+      artifact_dir: candidate.artifact_dir,
+      worker_pid: candidate.worker_pid,
+    });
+
     // TASK-3.2 (disconnect): hasil terminal WAJIB masuk outbox notify — hasil
     // tetap ada walau client hilang; reconnect → drainNotify (dedupe delivered).
     if (to === "done" || to === "failed" || to === "cancelled") {
@@ -362,6 +423,8 @@ export class TaskStore {
     failed: "gagal",
     cancelled: "dibatalkan",
     blocked: "terblokir (menunggu dependency)",
+    waiting_input: "menunggu input pengguna",
+    unknown: "status tidak diketahui (memerlukan investigasi)",
   };
 
   /**
@@ -478,6 +541,122 @@ export class TaskStore {
       delivered: row.delivered ? 1 : 0,
       delivered_at: row.delivered_at,
     };
+  }
+
+  // -- Outbox Event Stream (P0-1) --------------------------------------------
+
+  private getNextSequence(taskId: string): number {
+    const last = this.db
+      .prepare("SELECT MAX(sequence) as max_seq FROM task_outbox WHERE task_id = ?")
+      .get(taskId) as { max_seq: number | null } | undefined;
+    const current = last?.max_seq ?? 0;
+    return current + 1;
+  }
+
+  public recordOutboxEvent<T = Record<string, unknown>>(
+    taskId: string,
+    eventType: TaskEventType,
+    payload: T,
+  ): TaskEvent<T> {
+    const task = this.getTaskOrThrow(taskId);
+    const sequence = this.getNextSequence(taskId);
+    const now = this.nowMs();
+    const eventId = `evt_${taskId}_${sequence}_${now}`;
+
+    const event: TaskEvent<T> = {
+      eventId,
+      eventType,
+      taskId,
+      rootTaskId: task.parent_id ?? taskId,
+      parentTaskId: task.parent_id,
+      ownerId: task.session_room || "default",
+      sequence,
+      timestamp: new Date(now).toISOString(),
+      payload,
+    };
+
+    this.db
+      .prepare(
+        `INSERT INTO task_outbox (event_id, task_id, event_type, sequence, payload, created_at, published, published_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, NULL)`,
+      )
+      .run(
+        event.eventId,
+        event.taskId,
+        event.eventType,
+        event.sequence,
+        JSON.stringify(event.payload),
+        now,
+      );
+
+    // If eventBus is attached, dispatch immediately and mark published
+    if (this.eventBus) {
+      try {
+        this.eventBus.publish(event as TaskEvent<Record<string, unknown>>);
+        this.db
+          .prepare("UPDATE task_outbox SET published = 1, published_at = ? WHERE event_id = ?")
+          .run(this.nowMs(), event.eventId);
+      } catch (err) {
+        console.error(`[TaskStore] Failed to immediately publish outbox event ${eventId}:`, err);
+      }
+    }
+
+    return event;
+  }
+
+  /** Drain unpublished outbox events in strict sequence order */
+  public drainOutbox(): TaskEvent[] {
+    const rows = this.db
+      .prepare(
+        `SELECT event_id, task_id, event_type, sequence, payload, created_at
+         FROM task_outbox
+         WHERE published = 0
+         ORDER BY sequence ASC, created_at ASC`,
+      )
+      .all() as Array<{
+      event_id: string;
+      task_id: string;
+      event_type: string;
+      sequence: number;
+      payload: string;
+      created_at: number;
+    }>;
+
+    if (rows.length === 0) return [];
+
+    const now = this.nowMs();
+    const markPublished = this.db.prepare(
+      "UPDATE task_outbox SET published = 1, published_at = ? WHERE event_id = ?",
+    );
+
+    const events: TaskEvent[] = [];
+
+    const tx = this.db.transaction(() => {
+      for (const row of rows) {
+        const parsedPayload = JSON.parse(row.payload || "{}");
+        const event: TaskEvent = {
+          eventId: row.event_id,
+          eventType: row.event_type as TaskEventType,
+          taskId: row.task_id,
+          rootTaskId: row.task_id,
+          parentTaskId: null,
+          ownerId: "default",
+          sequence: row.sequence,
+          timestamp: new Date(row.created_at).toISOString(),
+          payload: parsedPayload,
+        };
+
+        markPublished.run(now, row.event_id);
+        events.push(event);
+
+        if (this.eventBus) {
+          this.eventBus.publish(event);
+        }
+      }
+    });
+
+    tx();
+    return events;
   }
 
   // -- Artifact (filesystem, DB hanya path) ------------------------------------
