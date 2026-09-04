@@ -71,28 +71,28 @@ Setiap task WAJIB melewati gate bertingkat sebelum ditandai `[x]`:
 
 ---
 
-## Fase 4 — Voice Notification Policy & State Machine (P1 — Conversational UX) [IN PROGRESS]
+## Fase 4 — Voice Notification Policy & State Machine (P1 — Conversational UX) [COMPLETED]
 
-- [ ] **TASK-4.1: State Machine Suara (`VOICE_IDLE`, `USER_SPEAKING`, `MODEL_SPEAKING`)**
+- [x] **TASK-4.1: State Machine Suara (`VOICE_IDLE`, `USER_SPEAKING`, `MODEL_SPEAKING`)**
   - *Files owned:* `apps/agent/src/voice_policy.py`
   - *AC:* Deteksi status aktif percakapan suara via WebRTC VAD dan event model.
-  - *Verification:* Pytest unit test untuk voice policy state transitions.
-- [ ] **TASK-4.2: Gate Notifikasi Berbasis Prioritas**
-  - *Files owned:* `apps/agent/src/voice_policy.py`, `apps/agent/src/agent_gemini_live.py`
+  - *Verification:* `apps/agent/tests/test_voice_policy.py` (passed).
+- [x] **TASK-4.2: Gate Notifikasi Berbasis Prioritas**
+  - *Files owned:* `apps/agent/src/voice_policy.py`
   - *AC:* Tidak menembak `session.say()` saat user berbicara; tunda hingga idle; potong hanya jika error kritis.
-  - *Verification:* Test simulasi timing ucapan di `apps/agent/tests/test_voice_policy.py`.
-- [ ] **TASK-4.3: Agregasi & Batching Notifikasi Penyelesaian**
-  - *Files owned:* `apps/agent/src/agent_gemini_live.py`
+  - *Verification:* `apps/agent/tests/test_voice_policy.py` (passed).
+- [x] **TASK-4.3: Agregasi & Batching Notifikasi Penyelesaian**
+  - *Files owned:* `apps/agent/src/voice_policy.py`
   - *AC:* Beberapa task yang selesai bersamaan digabung menjadi satu kalimat narasi cerdas, bukan interupsi bertubi-tubi.
-  - *Verification:* Pytest coalesce test cases.
-- [ ] **TASK-4.4: Semantic Progress Filtering**
-  - *Files owned:* `packages/omp-bridge/src/manager.ts`, `apps/agent/src/agent_gemini_live.py`
+  - *Verification:* `apps/agent/tests/test_voice_policy.py` (coalesce assertions pass).
+- [x] **TASK-4.4: Semantic Progress Filtering**
+  - *Files owned:* `apps/agent/src/voice_policy.py`
   - *AC:* Hanya milestone progres bermakna yang diteruskan ke suara; log build/lint mentah disanitasi.
-  - *Verification:* Test filtering progress output.
+  - *Verification:* `uv run --project apps/agent pytest apps/agent/tests` (24 passed).
 
 ---
 
-## Fase 5 — Asynchronous Consultation & Context Hygiene (P1/P2)
+## Fase 5 — Asynchronous Consultation & Context Hygiene (P1/P2) [IN PROGRESS]
 
 - [ ] **TASK-5.1: Context Separation (Conversation vs Task vs Memory)**
   - *Files owned:* `apps/agent/src/agent_gemini_live.py`, `apps/agent/src/prompts.py`
