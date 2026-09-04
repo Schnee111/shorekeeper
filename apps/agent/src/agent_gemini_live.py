@@ -684,16 +684,27 @@ async def my_agent(ctx: JobContext):
 
     ctx.add_shutdown_callback(cancel_resumption)
 
-    # Background Poller — Sprint C: claim atomik + interrupt + coalesce
+    # Event-Driven Notifier (P0-1):
+    # Menggantikan polling periodik 2.0s dengan event trigger instan via asyncio.Event.
+    # Event loop tetap memiliki fallback watchdog 5.0s jika ada sinyal eksternal terlewat.
+    notify_trigger = asyncio.Event()
+
     async def outbox_notification_loop():
         while True:
-            await asyncio.sleep(2.0)
-            if getattr(session, "_activity", None) is None or getattr(session, "_closing_task", None) is not None:
-                continue
             try:
+                # Tunggu sinyal event (atau timeout watchdog 5.0s)
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(notify_trigger.wait(), timeout=5.0)
+                notify_trigger.clear()
+
+                if getattr(session, "_activity", None) is None or getattr(session, "_closing_task", None) is not None:
+                    continue
+
                 await deliver_notifications(session, ctx.room.name)
+            except asyncio.CancelledError:
+                break
             except Exception as e:
-                logger.debug(f"Outbox poll error: {e}")
+                logger.debug(f"Outbox notification error: {e}")
 
     task_ref = asyncio.create_task(outbox_notification_loop())
 
