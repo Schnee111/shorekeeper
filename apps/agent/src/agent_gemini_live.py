@@ -28,8 +28,20 @@ from livekit.plugins.google.realtime import RealtimeModel
 
 logger = logging.getLogger("shorekeeper-agent")
 
+# Suppress spurious SDK internal warnings from google_genai:
+# 1. Dual API key collision (GOOGLE_API_KEY vs GEMINI_API_KEY)
+# 2. Direct AFC warning in AsyncModels.generate_content_stream (used internally by LiveKit GeminiTTS)
+logging.getLogger("google_genai._api_client").setLevel(logging.ERROR)
+logging.getLogger("google_genai.models").setLevel(logging.ERROR)
+
 load_dotenv(".env.local")
 load_dotenv(".env")
+
+# Canonicalize Google/Gemini API key in os.environ to avoid downstream SDK collision warnings (Issue #10)
+_canonical_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if _canonical_key:
+    os.environ["GEMINI_API_KEY"] = _canonical_key
+    os.environ["GOOGLE_API_KEY"] = _canonical_key
 
 # Database Path
 DATA_DIR = os.getenv("SHOREKEEPER_DATA_DIR") or os.path.abspath(
