@@ -1,18 +1,27 @@
-# Shorekeeper
+# Shorekeeper 🦋
 
-Voice-first multi-agent AI assistant platform. A realtime voice agent (LiveKit + Gemini Live) serves as the front interface, Hermes acts as the orchestrator, and oh-my-pi (omp) as coding workers — all coordinated through a SQLite WAL task store with self-hosted observability (OpenTelemetry + Jaeger + Prometheus).
+[![CI Quality Gates](https://img.shields.io/badge/Quality%20Gates-Passed%20(Exit--0)-emerald?style=flat-square)](scripts/gates/)
+[![Architecture](https://img.shields.io/badge/Architecture-Event--Driven%20Multi--Agent-blue?style=flat-square)](docs/ARCHITECTURE.md)
+[![License](https://img.shields.io/badge/License-MIT-purple?style=flat-square)](LICENSE)
+[![Zero Cost](https://img.shields.io/badge/Dependencies-100%25%20Free%20Tier-success?style=flat-square)](#guiding-principles)
 
-> Hard rule: all dependencies & APIs are **free** (zero subscriptions); LiveKit Cloud free tier with a hard cap.
+> **Shorekeeper** is a production-grade, voice-first multi-agent autonomous engineering platform. Featuring a real-time WebRTC conversational interface (LiveKit + Gemini Live), a central intelligent orchestrator (Hermes Agent Gateway), and asynchronous worker execution engines (oh-my-pi / omp) — unified by an atomic SQLite WAL task store, cross-wing semantic memory (MemPalace L2), and full self-hosted telemetry (OpenTelemetry + Jaeger + Prometheus).
 
-## Key Features
+---
 
-- **Realtime voice agent** — LiveKit Agents SDK + Gemini Live API, interruption handling, session resumption, proactive notifications via outbox.
-- **Multi-agent delegation** — spawn omp workers (or mock workers for fast execution), controlled parallelism, task conflict detection, retry.
-- **Crash-resilient task store** — SQLite WAL single-writer, atomic outbox, task status survives restarts.
-- **End-to-end observability** — OTLP traces → Jaeger, metrics → Prometheus, stack up/down in one command.
-- **Quality evaluation** — YAML golden set + rubric, shell quality gates (exit-0) per phase.
+## 🌟 Guiding Principles & Highlights
 
-## Architecture
+- **Zero-Cost Sovereign Stack:** 100% built on free tiers and open self-hosted software. No paid subscription APIs.
+- **Voice-First Natural Interaction:** Sub-second streaming audio over WebRTC with Gemini 3.1 Flash Live, native interruption recovery, and prewarmed worker pools for instant room entry.
+- **Substantive Voice Delivery:** Voice agents communicate actual, substantive findings and findings digests rather than empty status stubs.
+- **Persistent Semantic Recall:** Integrated with MemPalace L2 over JSON-RPC 2.0 (`POST /mcp`), recalling historical ADRs, project taxonomy, and user preferences in under 300 ms.
+- **Real Hermes WS Execution:** Asynchronous background tasks are dispatched to the live Hermes WebSocket gateway (`ws://127.0.0.1:9119/api/ws`), executing live bash scripts, git operations, and code reviews.
+- **Crash-Resilient Task Store:** SQLite WAL with single-writer architecture, atomic outbox dispatching, and deterministic deduplication surviving restarts.
+- **Granular Git Engineering Pipeline:** Strict autopilot loops: `Issue -> Feature Branch -> Granular Commits -> Test Gates -> PR -> Rebase Merge`.
+
+---
+
+## 🏗️ Architecture
 
 ```mermaid
 flowchart TB
@@ -23,20 +32,26 @@ flowchart TB
     end
 
     subgraph VoiceEngine["🗣️ Realtime Voice Layer"]
-        LK["LiveKit Cloud / SFU<br/>(WebRTC Stream)"]
-        FA["apps/agent<br/>(LiveKit SDK + Gemini Live G3)"]
+        LK["LiveKit Cloud / SFU<br/>(WebRTC 48kHz Stream)"]
+        FA["apps/agent<br/>(LiveKit SDK + Gemini 3.1 Live)"]
         TS["apps/token-server<br/>(aiohttp, :8082 JWT)"]
+    end
+
+    subgraph MemoryEngine["🏛️ Knowledge & Memory Layer"]
+        MP["MemPalace L2 Vault<br/>(JSON-RPC 2.0 MCP :8767)"]
+        SX["SearXNG Web Search<br/>(Docker SearX :8888)"]
     end
 
     subgraph OrchestrationEngine["🧠 Orchestration & Storage Layer"]
         ORC["Hermes Orchestrator<br/>(Gateway WS :9119)"]
         TSK["packages/task-store<br/>(SQLite WAL · Atomic Outbox)"]
-        CFM["packages/conflict-map<br/>(Task Conflict Registry)"]
+        CFM["packages/conflict-map<br/>(File Ownership & Merge Tree)"]
         MGO["packages/merge-orchestrator<br/>(Single Merge Gate & Verifier)"]
     end
 
-    subgraph WorkerEngine["🤖 Worker Execution Engine"]
-        OMP["packages/omp-bridge<br/>(oh-my-pi / MOCK Worker Pool)"]
+    subgraph WorkerEngine["🤖 Background Worker Engine"]
+        DMN["shorekeeper-daemon<br/>(Background Queue Runner)"]
+        OMP["packages/omp-bridge<br/>(Hermes WS Client / OMP Adapter)"]
         WT["Isolated Git Worktrees<br/>(One-File-One-Owner)"]
     end
 
@@ -46,24 +61,33 @@ flowchart TB
         PROM["Prometheus Metrics<br/>(:9090)"]
     end
 
-    %% Connections
+    %% Audio & Control Links
     U <-->|"WebRTC Audio"| LK
-    U <-->|"HUD UI & Controls"| CL
+    U <-->|"Voice HUD & Audio Controls"| CL
     CL -->|"Request JWT Token"| TS
     TS -->|"Mint Participant Token"| LK
-    LK <-->|"Realtime Audio Stream"| FA
-    FA <-->|"Delegation / Status Query"| ORC
+    LK <-->|"Bi-directional Audio"| FA
+
+    %% Agent Integrations
+    FA <-->|"JSON-RPC tools/call"| MP
+    FA <-->|"HTTP Search Query"| SX
+    FA <-->|"Enqueue Task / Poll Status"| TSK
+
+    %% Daemon & Orchestration Execution
+    DMN <-->|"Poll Queued / Running"| TSK
+    DMN <-->|"Stream Tasks & Events"| OMP
+    OMP <-->|"WebSocket RPC (:9119)"| ORC
+    ORC -->|"Execute in Isolated Worktree"| WT
     
-    ORC <-->|"State Transactions"| TSK
-    ORC <-->|"Ownership Check"| CFM
-    ORC -->|"Spawn Task Spec"| OMP
-    OMP -->|"Execute in Worktree"| WT
-    
-    WT -->|"Verification Gate"| MGO
-    MGO -->|"Sequential Merge"| TSK
-    
-    OMP -.->|"Telemetry Spans"| OTEL
-    ORC -.->|"Telemetry Spans"| OTEL
+    %% Conflict & Merge Gate
+    WT -->|"Pre-merge Verification"| CFM
+    CFM -->|"Merge Gate"| MGO
+    MGO -->|"State Update & Outbox"| TSK
+
+    %% Telemetry Flow
+    OMP -.->|"OTLP Spans"| OTEL
+    ORC -.->|"OTLP Spans"| OTEL
+    FA -.->|"OTLP Spans"| OTEL
     OTEL --> JAEGER
     OTEL --> PROM
 
@@ -72,95 +96,129 @@ flowchart TB
     classDef default fill:#0f172a,stroke:#334155,color:#f8fafc,stroke-width:1.5px;
 ```
 
-Flow summary: the user speaks to the client → media streams via LiveKit Cloud to `apps/agent` → the agent processes it with Gemini Live; work tasks are delegated through `omp-bridge` to oh-my-pi workers (production uses a mock worker for fast execution with zero Hermes dependency), results land in the task store; the Hermes orchestrator pushes/claims tasks over WS. All production components bind `127.0.0.1` — public access goes exclusively through Nginx/domain.
+---
 
-## Stack
+## 📦 Monorepo Structure
 
-| Layer | Technology |
+```text
+shorekeeper/
+├── apps/
+│   ├── agent/             # Python (uv): LiveKit Gemini 3.1 Live agent & MCP connectors
+│   ├── client/            # Svelte 5 + Vite: Cyber-anime Voice HUD & WebRTC client
+│   └── token-server/      # Python aiohttp: LiveKit JWT generation service (:8082)
+├── packages/
+│   ├── contracts/         # Zod schemas for task handoff, events, and records
+│   ├── omp-bridge/        # Hermes WS client, task daemon, & stream token aggregator
+│   ├── task-store/        # SQLite WAL task storage, atomic outbox, and state machine
+│   ├── conflict-map/      # File-level concurrency protection & pre-spawn conflict checks
+│   ├── merge-orchestrator/# Sequential merge verifier for background worktrees
+│   └── observability/     # OpenTelemetry tracing helpers and privacy sanitizers
+├── scripts/
+│   ├── gates/             # Deterministic quality gate test runners (exit-0 requirement)
+│   ├── e2e/               # End-to-end multi-agent integration & real-world stress suites
+│   ├── eval/              # Golden set evaluation harness (20 YAML scenarios)
+│   ├── otel/              # Observability stack bootstrap (Jaeger, Prometheus, Collector)
+│   └── ops/               # Online database backup and atomic recovery scripts
+├── deploy/                # Systemd service units & production environment templates
+└── docs/                  # Architecture specs, PRDs, ADRs, runbooks, and golden sets
+```
+
+---
+
+## 🛠️ Tech Stack & Prerequisites
+
+| Subsystem | Technologies & Frameworks |
 |---|---|
-| Voice agent | Python 3.10+, LiveKit Agents SDK, Gemini Live API (`uv` per-app, not a workspace) |
-| Client | Svelte 5 + Vite + TypeScript |
-| Packages | Node ESM (pnpm workspaces), better-sqlite3 (SQLite WAL), zod |
-| Token server | Python aiohttp (LiveKit JWT) |
-| Observability | OpenTelemetry Collector, Jaeger all-in-one, Prometheus (Docker Compose) |
-| Quality | vitest, eslint + prettier, ruff, pytest, exit-0 quality gates |
+| **Voice Agent** | Python 3.11+, LiveKit Agents SDK v1.6+, Google Gemini Live (`gemini-3.1-flash-live-preview`), `uv` |
+| **Client UI** | Svelte 5 (Runes), Vite, TypeScript, TailwindCSS, WebRTC Audio API (48kHz) |
+| **Orchestration** | Node.js ≥ 22 (ESM), pnpm workspaces, Hermes Agent Gateway (WebSocket RPC) |
+| **Data & Memory** | SQLite (WAL mode, `better-sqlite3`), MemPalace L2 (JSON-RPC 2.0 MCP server) |
+| **Observability** | OpenTelemetry Collector, Jaeger UI, Prometheus (Docker Compose) |
+| **Testing & Quality** | Vitest, ESLint, Prettier, Pytest, Ruff |
 
-## Repository Layout
+---
 
-```
-apps/
-  agent/          # LiveKit voice agent (Python): Gemini Live, LLM bridge, notifications
-  client/         # Svelte 5 UI: voice orb, recorder, model/voice picker
-  token-server/   # LiveKit JWT endpoint (aiohttp)
-packages/
-  contracts/      # handoff-contract JSON/zod — source of truth for cross-component schema
-  omp-bridge/     # oh-my-pi integration: worker spawn, mock worker, timeout, error mapping
-  task-store/     # SQLite WAL: task status, atomic outbox, single-writer
-  conflict-map/   # task conflict detection
-  merge-orchestrator/ # single merge gate for multi-worker results
-  observability/  # OTel tracing/metrics helpers
-scripts/
-  gates/          # per-phase quality gates (exit-0 = pass)
-  e2e/            # E2E harness + smoke tests (parallel, conflict, prod)
-  eval/           # golden set runner + linter
-  otel/           # observability stack up/down
-  ops/            # online DB backup/restore
-tests/
-  unit/ integration/ e2e/   # nested-repo fixtures bootstrapped deterministically
-docs/
-  adr/            # decision records (layout, omp transport, merge policy, observability)
-  agents/         # persona prompts: SOUL, FRONT_AGENT, VOICE_MODE, etc.
-  golden-set/     # golden test cases (YAML)
-  runbooks/
-```
+## 🚀 Quickstart & Development
 
-## Getting Started
+### 1. Prerequisites
+Ensure you have installed:
+- **Node.js** ≥ 22.x & **pnpm** ≥ 9.x
+- **Python** ≥ 3.11 & **uv** package manager
+- **Docker & Docker Compose** v2 (for self-hosted observability & SearXNG)
 
-Prerequisites: Node.js ≥ 22, pnpm ≥ 9, `uv` + Python ≥ 3.10, Docker + Compose v2 (for observability).
-
+### 2. Installation
 ```bash
-# TS workspace
+# Clone the repository
+git clone https://github.com/Schnee111/shorekeeper.git
+cd shorekeeper
+
+# Install TypeScript workspace dependencies & build packages
 pnpm install
 pnpm -r build
-pnpm -r lint          # warning = failure
-pnpm -r test
 
-# Python agent
+# Sync Python environment dependencies
 uv sync --project apps/agent
-uv run --project apps/agent pytest -q apps/agent/tests
-uv run --project apps/agent ruff check .
-
-# observability stack (localhost-bound)
-bash scripts/otel/up.sh
-bash scripts/otel/down.sh
-
-# smoke & gates
-bash scripts/e2e/smoke-omp.sh        # single-task delegation (mock worker)
-bash scripts/e2e/smoke-parallel.sh   # 3 parallel tasks
-bash scripts/gates/gate-fase1.sh     # PHASE 1 GATE (exit 0)
 ```
 
-For VPS deployment details (tight 3.6 GB RAM budget, systemd, ports): see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+### 3. Environment Setup
+Create the local environment files based on the provided templates:
+```bash
+cp apps/agent/.env.example apps/agent/.env.local
+```
+Fill in the following required variables in `apps/agent/.env.local`:
+- `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`
+- `GEMINI_API_KEY` (or `GOOGLE_API_KEY`)
+- `MEMPALACE_MCP_HTTP_ENDPOINT` (default: `http://127.0.0.1:8767/mcp`)
+- `MEMPALACE_MCP_HTTP_TOKEN`
+- `HERMES_WS_URL` (default: `ws://127.0.0.1:9119/api/ws`)
 
-## Configuration
+### 4. Running Quality Gates & Tests
+Before committing changes, execute the non-negotiable verification gates:
+```bash
+# Workspace lint & unit test verification
+pnpm -r lint
+pnpm -r test
 
-Copy `.env.example` → `.env.local` (under `apps/agent/`) and fill in your LiveKit/Gemini credentials. `.env*` files never enter git. The production daemon uses the mock worker (`OMP_BRIDGE_MOCK=1`) by default.
+# Python agent linting & test suite
+uv run --project apps/agent ruff check .
+uv run --project apps/agent pytest -q apps/agent/tests
 
-## Documentation
+# End-to-End verification suites
+bash scripts/gates/gate-fase1.sh
+bash scripts/gates/gate-fase2.sh
+node scripts/e2e/comprehensive-test.mjs
+```
 
-| Document | Contents |
-|---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design & C4 diagrams |
-| [docs/PRD.md](docs/PRD.md) | Product requirements |
-| [docs/api.md](docs/api.md) | API contracts & handoff schema |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | WSL → VPS deployment guide |
-| [docs/BLOCKERS.md](docs/BLOCKERS.md) | Open technical blockers (OMP-001, etc.) |
-| [docs/HANDOFF_DESIGN.md](docs/HANDOFF_DESIGN.md) | Multi-device handoff design |
-| [docs/EDGE-CASES.md](docs/EDGE-CASES.md) | Edge case catalog (E01–E33) |
-| [docs/observability.md](docs/observability.md) | Tracing & metrics |
-| [docs/adr/](docs/adr/) | Architecture decision records |
-| [AGENTS.md](AGENTS.md) | Working conventions & quality gate commands |
+---
 
-## Credits
+## ⚙️ Production Operations (Systemd)
 
-Built by [Schnee111](https://github.com/Schnee111).
+In a live production environment (e.g. Linux VPS under tight RAM budgets), the components are isolated and managed via dedicated systemd services:
+
+```bash
+# Restart voice agent and background daemon
+sudo systemctl restart shorekeeper-agent.service
+sudo systemctl restart shorekeeper-daemon.service
+
+# Inspect service logs
+journalctl -u shorekeeper-agent.service -f
+journalctl -u shorekeeper-daemon.service -f
+```
+
+---
+
+## 📚 Documentation Index
+
+- [Architecture & C4 Diagrams](docs/ARCHITECTURE.md) — Comprehensive architectural topology and dataflows.
+- [Product Requirements Document (PRD)](docs/PRD.md) — Feature specifications and phase acceptance criteria.
+- [API & Schema Contracts](docs/api.md) — Zod schemas, task structures, and WebSocket contracts.
+- [Deployment Runbook](docs/DEPLOYMENT.md) — Linux VPS provisioning, memory budgeting, and reverse proxy setup.
+- [Observability Guide](docs/observability.md) — Jaeger distributed tracing, OTel spans, and metrics instrumentation.
+- [Engineering Conventions (AGENTS.md)](AGENTS.md) — Living developer guide and Git autopilot workflow rules.
+- [Architecture Decision Records (ADRs)](docs/adr/) — Technical trade-off logs and architectural decisions.
+
+---
+
+## 👤 Author & Maintainer
+
+Engineered with devotion by [**Muhammad Daffa Ma'arif (Schnee111)**](https://github.com/Schnee111).
