@@ -122,7 +122,10 @@ SHOREKEEPER_INSTRUCTIONS = textwrap.dedent(
     - Fast-ack always: When Schnee gives a command or task:
       1. YOU MUST CALL `delegate_task(title, instruction, lane)` IMMEDIATELY.
       2. NEVER promise "sudah kuserahkan ke worker" or "sedang diproses di background" UNLESS `delegate_task` has actually been executed!
-    - When Schnee asks for progress or if a task is done ("sudah belum?"), YOU MUST CALL `check_task_status(task_id)` to read the actual SQLite status before speaking. NEVER guess or invent that a worker is still working!
+    - When Schnee asks for progress, what tasks were done, or what the results are ("sudah belum?", "aktivitas apa aja?"):
+      1. YOU MUST CALL `check_task_status(task_id)` to read the actual SQLite status and findings.
+      2. NEVER guess, and NEVER give empty answers like "tugas sudah selesai" without stating the actual substantive findings/summary!
+      3. Verbalize the substantive findings naturally in Shorekeeper's calm, refined voice (e.g. summarize the actual GitHub activities, repository changes, or research outcomes).
 
     # 2A. Proactivity (Sprint A)
     - After completing an action: state result briefly (1 sentence), then offer ONE optional next step as a short question.
@@ -464,18 +467,24 @@ COALESCE_MAX = 5
 
 
 def coalesce_notifications(rows: list[dict]) -> str:
-    """C.3: gabungkan baris notifikasi jadi SATU ucapan natural (maks 5 item)."""
+    """C.3: gabungkan baris notifikasi jadi SATU ucapan natural yang menyampaikan konten temuan nyata."""
     n = len(rows)
     if n == 1:
         r = rows[0]
-        summary = r.get("summary") or "sudah selesai."
-        return f"Schnee, task {r.get('user_intent') or r['task_id']}: {summary}"
+        intent = (r.get("user_intent") or r["task_id"]).split(":")[0].strip()
+        summary = (r.get("summary") or "").strip()
+        if summary and not summary.startswith("Task '") and not summary.endswith("tanpa network)."):
+            return f"Schnee, tugas mengenai {intent} sudah selesai. Berikut ringkasannya: {summary}"
+        elif summary:
+            return f"Schnee, tugas mengenai {intent} sudah berhasil diselesaikan."
+        return f"Schnee, tugas mengenai {intent} sudah selesai."
+
     word = _NUM_WORDS.get(n, str(n))
     parts = []
     for r in rows:
-        intent = (r.get("user_intent") or r["task_id"]).split(":")[0][:60]
+        intent = (r.get("user_intent") or r["task_id"]).split(":")[0].strip()[:60]
         parts.append(intent)
-    return f"Schnee, {word} task selesai: {'; '.join(parts)}."
+    return f"Schnee, {word} tugas di latar belakang telah selesai, yaitu mengenai {', dan '.join(parts)}."
 
 
 def _rollback_delivered(task_ids: list[str], db_path: str) -> None:
