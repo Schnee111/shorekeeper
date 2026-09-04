@@ -135,7 +135,7 @@ def test_coalesce_multiple_natural_word():
         {"task_id": f"t{i}", "user_intent": f"task {i}", "summary": ""} for i in range(3)
     ]
     out = agl.coalesce_notifications(rows)
-    assert "tiga task selesai" in out
+    assert "tiga tugas" in out
 
 
 def test_coalesce_max_five_items():
@@ -144,7 +144,7 @@ def test_coalesce_max_five_items():
     ]
     # deliver_notifications membatasi via LIMIT; coalesce sendiri maks 5 input
     out = agl.coalesce_notifications(rows[: agl.COALESCE_MAX])
-    assert "lima task selesai" in out
+    assert "lima tugas" in out
 
 
 @pytest.mark.asyncio
@@ -156,7 +156,7 @@ async def test_deliver_coalesces_to_one_utterance(monkeypatch, tmp_path):
     n = await agl.deliver_notifications(sess, "room-1", db_path=db)
     assert n == 3
     assert len(sess.said) == 1  # SATU ucapan gabungan
-    assert "tiga task selesai" in sess.said[0]
+    assert "tiga tugas di latar belakang telah selesai" in sess.said[0]
     for i in range(3):
         assert _delivered(db, f"task_{i}") == 1
 
